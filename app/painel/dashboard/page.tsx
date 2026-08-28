@@ -14,13 +14,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KpiCard } from "@/components/kpi-card";
+import { StatusBadge } from "@/components/status-badge";
 import { useKPIs, usePagamentosDoMes, useReceitaMensal } from "@/lib/queries";
 import { formatBRL, formatDate, GRAU_DIFICULDADE_LABELS } from "@/lib/utils";
-import { GRAUS_DIFICULDADE, type StatusPagamento } from "@/lib/types";
+import { GRAUS_DIFICULDADE } from "@/lib/types";
 import { hasAccess } from "@/lib/auth";
 
 // Recharts é uma dependência pesada (~100kb+ de JS); carregando sob demanda em
@@ -32,20 +32,6 @@ const RevenueChart = dynamic(
 );
 
 const PAGAMENTOS_POR_PAGINA = 10;
-
-const STATUS_VARIANT: Record<StatusPagamento, "success" | "warning" | "destructive" | "secondary"> = {
-  pago: "success",
-  projetado: "warning",
-  atrasado: "destructive",
-  cancelado: "secondary",
-};
-
-const STATUS_LABEL: Record<StatusPagamento, string> = {
-  pago: "Pago",
-  projetado: "Projetado",
-  atrasado: "Atrasado",
-  cancelado: "Cancelado",
-};
 
 const GRAU_TEXT_CLASS: Record<(typeof GRAUS_DIFICULDADE)[number], string> = {
   BAIXO: "text-success",
@@ -195,9 +181,7 @@ export default function DashboardPage() {
                         <TableCell>{formatBRL(p.valor)}</TableCell>
                         <TableCell>{formatDate(p.data_vencimento)}</TableCell>
                         <TableCell>
-                          <Badge variant={STATUS_VARIANT[p.status]}>
-                            {STATUS_LABEL[p.status]}
-                          </Badge>
+                          <StatusBadge status={p.status} size="sm" />
                         </TableCell>
                       </TableRow>
                     ))

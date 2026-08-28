@@ -28,12 +28,23 @@ import {
   getGrauDificuldadeBadgeVariant,
   GRAU_DIFICULDADE_LABELS,
 } from "@/lib/utils";
-import { GRAUS_DIFICULDADE, type ClienteDetalhes, type StatusContrato } from "@/lib/types";
+import {
+  GRAUS_DIFICULDADE,
+  type ClienteDetalhes,
+  type StatusContrato,
+  type TipoPagamento,
+} from "@/lib/types";
 import { maskCurrencyToNumber, formatCurrencyInput } from "@/lib/masks";
 
 type Contrato = ClienteDetalhes["contratos"][number];
 
 const STATUS_CONTRATO_EDITAVEL: StatusContrato[] = ["ativo", "cancelado"];
+
+const TIPO_PAGAMENTO_LABEL: Record<TipoPagamento, string> = {
+  recorrente: "Recorrente",
+  venda_unica: "Venda Única",
+  parcelado: "Parcelado",
+};
 
 const STATUS_CONTRATO_LABEL: Record<StatusContrato, string> = {
   ativo: "Ativo",
@@ -60,12 +71,20 @@ export function TabelaContratosEditavel({
 
   function iniciarEdicao(contrato: Contrato) {
     setEditId(contrato.id);
-    setForm({
-      valor_mensal: contrato.valor_mensal,
-      data_vencimento_mensal: contrato.data_vencimento_mensal,
-      grau_dificuldade: contrato.grau_dificuldade,
-      status: contrato.status === "inativo" ? "ativo" : contrato.status,
-    });
+    setForm(
+      contrato.tipo_pagamento === "recorrente"
+        ? {
+            valor_mensal: contrato.valor_mensal ?? undefined,
+            data_vencimento_mensal: contrato.data_vencimento_mensal ?? undefined,
+            grau_dificuldade: contrato.grau_dificuldade,
+            status: contrato.status === "inativo" ? "ativo" : contrato.status,
+          }
+        : {
+            valor_total: contrato.valor_total ?? undefined,
+            grau_dificuldade: contrato.grau_dificuldade,
+            status: contrato.status === "inativo" ? "ativo" : contrato.status,
+          }
+    );
   }
 
   function cancelarEdicao() {
@@ -73,20 +92,26 @@ export function TabelaContratosEditavel({
     setForm({});
   }
 
-  async function salvar(id: string) {
-    if (!form.valor_mensal || form.valor_mensal <= 0) {
-      toast.error("Informe um valor mensal válido");
-      return;
-    }
-    if (
-      !form.data_vencimento_mensal ||
-      form.data_vencimento_mensal < 1 ||
-      form.data_vencimento_mensal > 31
-    ) {
-      toast.error("Dia de vencimento deve estar entre 1 e 31");
+  async function salvar(contrato: Contrato) {
+    if (contrato.tipo_pagamento === "recorrente") {
+      if (!form.valor_mensal || form.valor_mensal <= 0) {
+        toast.error("Informe um valor mensal válido");
+        return;
+      }
+      if (
+        !form.data_vencimento_mensal ||
+        form.data_vencimento_mensal < 1 ||
+        form.data_vencimento_mensal > 31
+      ) {
+        toast.error("Dia de vencimento deve estar entre 1 e 31");
+        return;
+      }
+    } else if (!form.valor_total || form.valor_total <= 0) {
+      toast.error("Informe um valor total válido");
       return;
     }
 
+    const id = contrato.id;
     try {
       await atualizar.mutateAsync({ id, payload: form });
       toast.success("Contrato atualizado com sucesso!");
@@ -101,7 +126,8 @@ export function TabelaContratosEditavel({
       <TableHeader>
         <TableRow>
           <TableHead>Produto</TableHead>
-          <TableHead>Valor Mensal</TableHead>
+          <TableHead>Tipo</TableHead>
+          <TableHead>Valor</TableHead>
           <TableHead>Dia Vencimento</TableHead>
           <TableHead>Grau de Dificuldade</TableHead>
           <TableHead>Status</TableHead>
@@ -111,36 +137,56 @@ export function TabelaContratosEditavel({
       <TableBody>
         {contratos.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6} className="text-center text-muted-foreground">
+            <TableCell colSpan={7} className="text-center text-muted-foreground">
               Nenhum contrato cadastrado.
             </TableCell>
           </TableRow>
         ) : (
           contratos.map((contrato) => {
             const emEdicao = editId === contrato.id;
+            const recorrente = contrato.tipo_pagamento === "recorrente";
             return (
               <TableRow key={contrato.id}>
                 <TableCell className="font-medium">{contrato.produto?.nome ?? "-"}</TableCell>
 
+                <TableCell>{TIPO_PAGAMENTO_LABEL[contrato.tipo_pagamento]}</TableCell>
+
                 <TableCell>
                   {emEdicao ? (
-                    <Input
-                      className="w-32"
-                      value={form.valor_mensal ? formatCurrencyInput(form.valor_mensal) : ""}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          valor_mensal: maskCurrencyToNumber(e.target.value),
-                        }))
-                      }
-                    />
+                    recorrente ? (
+                      <Input
+                        className="w-32"
+                        value={form.valor_mensal ? formatCurrencyInput(form.valor_mensal) : ""}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            valor_mensal: maskCurrencyToNumber(e.target.value),
+                          }))
+                        }
+                      />
+                    ) : (
+                      <Input
+                        className="w-32"
+                        value={form.valor_total ? formatCurrencyInput(form.valor_total) : ""}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            valor_total: maskCurrencyToNumber(e.target.value),
+                          }))
+                        }
+                      />
+                    )
+                  ) : recorrente ? (
+                    `${formatBRL(contrato.valor_mensal)}/mês`
                   ) : (
-                    formatBRL(contrato.valor_mensal)
+                    formatBRL(contrato.valor_total)
                   )}
                 </TableCell>
 
                 <TableCell>
-                  {emEdicao ? (
+                  {!recorrente ? (
+                    "-"
+                  ) : emEdicao ? (
                     <Input
                       type="number"
                       min={1}
@@ -215,7 +261,7 @@ export function TabelaContratosEditavel({
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={() => salvar(contrato.id)}
+                        onClick={() => salvar(contrato)}
                         disabled={atualizar.isPending}
                         aria-label="Salvar"
                       >

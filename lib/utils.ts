@@ -34,6 +34,32 @@ export function formatCNPJDisplay(cnpj: string | null | undefined): string {
   return cnpj;
 }
 
+/** Moeda sem centavos, para os KPIs do dashboard (números grandes, foco em legibilidade). */
+export function formatarMoedaDashboard(valor: number | null | undefined): string {
+  if (valor === null || valor === undefined || Number.isNaN(valor)) return "R$ 0";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  }).format(valor);
+}
+
+/** "5,73%" ou "-18,76%"; "N/A" quando não há mês anterior pra comparar. */
+export function formatarPercentual(valor: number | null | undefined): string {
+  if (valor === null || valor === undefined || Number.isNaN(valor)) return "N/A";
+  return `${new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(valor)}%`;
+}
+
+/** "R$ 386" ou "-R$ 22"; "N/A" quando não há mês anterior pra comparar. */
+export function formatarRsCrescimento(valor: number | null | undefined): string {
+  if (valor === null || valor === undefined || Number.isNaN(valor)) return "N/A";
+  const absoluto = formatarMoedaDashboard(Math.abs(valor));
+  return valor < 0 ? `-${absoluto}` : absoluto;
+}
+
 export const GRAU_DIFICULDADE_LABELS: Record<GrauDificuldade, string> = {
   BAIXO: "Baixo",
   MEDIO: "Médio",

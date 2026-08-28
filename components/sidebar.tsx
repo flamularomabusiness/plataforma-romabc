@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, LayoutDashboard, Menu, User, Users, X } from "lucide-react";
+import { CalendarRange, Home, LayoutDashboard, Menu, Upload, User, Users, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { podeAcessar, ROLE_LABELS, useUserRole, type Funcionalidade } from "@/lib/auth";
@@ -16,7 +16,19 @@ const ITENS_MENU: Array<{
 }> = [
   { href: "/painel/inicio", label: "Início", icon: Home },
   { href: "/painel/dashboard", label: "Dashboard", icon: LayoutDashboard, funcionalidade: "dashboard" },
+  {
+    href: "/painel/dashboard-kpis",
+    label: "Dashboard Mês a Mês",
+    icon: CalendarRange,
+    funcionalidade: "dashboard",
+  },
   { href: "/painel/clientes", label: "Clientes", icon: Users, funcionalidade: "clientes" },
+  {
+    href: "/painel/importar-dados",
+    label: "Importar Dados",
+    icon: Upload,
+    funcionalidade: "importarDados",
+  },
 ];
 
 export function Sidebar() {
@@ -52,10 +64,14 @@ export function Sidebar() {
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-4">
           {itensVisiveis.map((item) => {
+            // startsWith puro colidiria "/painel/dashboard-kpis" com o item
+            // "/painel/dashboard" (prefixo em comum) — exige o path exato ou
+            // uma sub-rota real (com "/" depois), não qualquer string que
+            // comece igual.
             const ativo =
               item.href === "/painel/inicio"
                 ? pathname === item.href
-                : pathname?.startsWith(item.href);
+                : pathname === item.href || pathname?.startsWith(`${item.href}/`);
             const Icon = item.icon;
             return (
               <Link

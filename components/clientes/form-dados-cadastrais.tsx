@@ -65,12 +65,15 @@ export function FormDadosCadastrais({ cliente }: { cliente: Cliente }) {
   async function onSubmit(values: DadosCadastraisValues) {
     try {
       await atualizar.mutateAsync({
-        nome_razao_social: values.nome_razao_social,
-        cpf_cnpj_responsavel: values.cpf_cnpj_responsavel,
-        email_responsavel: values.email_responsavel,
-        telefone_responsavel: values.telefone_responsavel || null,
-        data_nascimento_responsavel: values.data_nascimento_responsavel || null,
-        rede_social_responsavel: values.rede_social_responsavel || null,
+        id: cliente.id,
+        payload: {
+          nome_razao_social: values.nome_razao_social,
+          cpf_cnpj_responsavel: values.cpf_cnpj_responsavel,
+          email_responsavel: values.email_responsavel,
+          telefone_responsavel: values.telefone_responsavel || null,
+          data_nascimento_responsavel: values.data_nascimento_responsavel || null,
+          rede_social_responsavel: values.rede_social_responsavel || null,
+        },
       });
       toast.success("Cliente atualizado com sucesso!");
       setEditando(false);

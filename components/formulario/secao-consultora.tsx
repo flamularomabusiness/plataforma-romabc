@@ -59,7 +59,7 @@ Maiores Dores e Desafios:
 O Que Espera da ROMA BC:
 [O que quer resolver com nossas soluções]`;
 
-export function AbaConsultora() {
+export function SecaoConsultora() {
   const form = useFormContext<FormularioContratoValues>();
   const { data: consultoras, isLoading } = useConsultoras();
 

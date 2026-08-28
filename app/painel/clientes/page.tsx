@@ -3,20 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Copy, Search } from "lucide-react";
+import { Copy, Search, UserPlus } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -25,16 +18,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { StatusBadge } from "@/components/status-badge";
+import { StatusFilter } from "@/components/status-filter";
+import { ModalAdicionarPessoa } from "@/components/clientes/modal-adicionar-pessoa";
 import { useClientes } from "@/lib/queries";
+import { podeAcessar, useUserRole } from "@/lib/auth";
 import { formatBRL, GRAU_DIFICULDADE_LABELS, getGrauDificuldadeBadgeVariant } from "@/lib/utils";
+import type { StatusCliente } from "@/lib/types";
 
 const POR_PAGINA = 50;
 
 export default function ClientesPage() {
+  const userRole = useUserRole();
+  const podeAdicionarPessoa = podeAcessar(userRole, "adicionarPessoa");
+
   const [buscaInput, setBuscaInput] = useState("");
   const [busca, setBusca] = useState("");
-  const [status, setStatus] = useState<"Ativo" | "Inativo" | "Todos">("Todos");
+  const [status, setStatus] = useState<StatusCliente | "TODOS">("TODOS");
   const [pagina, setPagina] = useState(1);
+  const [clienteParaPessoa, setClienteParaPessoa] = useState<{
+    id: string;
+    nome_razao_social: string;
+  } | null>(null);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -70,22 +75,13 @@ export default function ClientesPage() {
               onChange={(e) => setBuscaInput(e.target.value)}
             />
           </div>
-          <Select
+          <StatusFilter
             value={status}
-            onValueChange={(v) => {
-              setStatus(v as typeof status);
+            onStatusChange={(v) => {
+              setStatus(v);
               setPagina(1);
             }}
-          >
-            <SelectTrigger className="sm:w-48">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Todos">Todos os status</SelectItem>
-              <SelectItem value="Ativo">Ativo</SelectItem>
-              <SelectItem value="Inativo">Inativo</SelectItem>
-            </SelectContent>
-          </Select>
+          />
         </CardContent>
       </Card>
 
@@ -105,12 +101,16 @@ export default function ClientesPage() {
                     <TableHead>Contratos Ativos</TableHead>
                     <TableHead>Grau de Dificuldade</TableHead>
                     <TableHead>Status</TableHead>
+                    {podeAdicionarPessoa && <TableHead className="text-right">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(data?.data ?? []).length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground">
+                      <TableCell
+                        colSpan={podeAdicionarPessoa ? 8 : 7}
+                        className="text-center text-muted-foreground"
+                      >
                         Nenhum cliente encontrado.
                       </TableCell>
                     </TableRow>
@@ -148,10 +148,26 @@ export default function ClientesPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={cliente.status === "Ativo" ? "success" : "secondary"}>
-                            {cliente.status}
-                          </Badge>
+                          <StatusBadge status={cliente.status} />
                         </TableCell>
+                        {podeAdicionarPessoa && (
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              title="Adicionar pessoa"
+                              onClick={() =>
+                                setClienteParaPessoa({
+                                  id: cliente.id,
+                                  nome_razao_social: cliente.nome_razao_social,
+                                })
+                              }
+                            >
+                              <UserPlus className="mr-2 h-3.5 w-3.5" />
+                              Pessoa
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   )}
@@ -185,6 +201,14 @@ export default function ClientesPage() {
           )}
         </CardContent>
       </Card>
+
+      <ModalAdicionarPessoa
+        cliente={clienteParaPessoa}
+        open={!!clienteParaPessoa}
+        onOpenChange={(open) => {
+          if (!open) setClienteParaPessoa(null);
+        }}
+      />
     </div>
   );
 }

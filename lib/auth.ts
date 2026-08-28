@@ -25,12 +25,43 @@ export const ROLE_LABELS: Record<UserRole, string> = {
  * dashboard mas não cria contrato), então "gerente >= financeiro >= comercial"
  * não é uma modelagem válida. gerente é o único que acumula tudo.
  */
-export type Funcionalidade = "dashboard" | "clientes" | "formulario";
+export type Funcionalidade =
+  | "dashboard"
+  | "clientes"
+  | "formulario"
+  | "editarStatusCliente"
+  | "editarStatusPagamento"
+  | "importarDados"
+  | "adicionarPessoa";
 
 const PERMISSOES: Record<UserRole, Record<Funcionalidade, boolean>> = {
-  comercial: { dashboard: false, clientes: true, formulario: true },
-  gerente: { dashboard: true, clientes: true, formulario: true },
-  financeiro: { dashboard: true, clientes: true, formulario: false },
+  comercial: {
+    dashboard: false,
+    clientes: true,
+    formulario: true,
+    editarStatusCliente: false,
+    editarStatusPagamento: false,
+    importarDados: false,
+    adicionarPessoa: false,
+  },
+  gerente: {
+    dashboard: true,
+    clientes: true,
+    formulario: true,
+    editarStatusCliente: true,
+    editarStatusPagamento: true,
+    importarDados: true,
+    adicionarPessoa: true,
+  },
+  financeiro: {
+    dashboard: true,
+    clientes: true,
+    formulario: false,
+    editarStatusCliente: true,
+    editarStatusPagamento: true,
+    importarDados: true,
+    adicionarPessoa: true,
+  },
 };
 
 export function getUserRole(): UserRole {
