@@ -444,7 +444,12 @@ export async function importarDadosExcel(payload: {
 
   const json = await response.json();
   if (!response.ok) {
-    throw new Error(json?.error ?? "Erro ao importar dados");
+    // json.details carrega a mensagem específica (do Zod ou da RPC — ex.:
+    // "Sheet PAGAMENTOS, linha 5: ..."), enquanto json.error é só um rótulo
+    // genérico ("Erro ao importar dados"). Sem isso, todo 400 aparecia pro
+    // usuário como a mesma mensagem genérica, sem dizer qual linha/motivo.
+    const detalhe = typeof json?.details === "string" ? json.details : null;
+    throw new Error(detalhe ?? json?.error ?? "Erro ao importar dados");
   }
   return json;
 }

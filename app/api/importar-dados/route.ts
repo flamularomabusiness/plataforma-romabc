@@ -44,8 +44,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
+  console.log("[importar-dados] payload recebido:", {
+    contentType: request.headers.get("content-type"),
+    clientes: Array.isArray((body as { clientes?: unknown })?.clientes)
+      ? (body as { clientes: unknown[] }).clientes.length
+      : "ausente",
+    pagamentos: Array.isArray((body as { pagamentos?: unknown })?.pagamentos)
+      ? (body as { pagamentos: unknown[] }).pagamentos.length
+      : "ausente",
+  });
+
   const parsed = payloadSchema.safeParse(body);
   if (!parsed.success) {
+    console.error("[importar-dados] validação Zod falhou:", JSON.stringify(parsed.error.flatten()));
     return NextResponse.json(
       { error: "Payload inválido", details: parsed.error.flatten() },
       { status: 400 }
