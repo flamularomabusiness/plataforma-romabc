@@ -6,6 +6,26 @@ import type { ImportarDadosResultado } from "@/lib/types";
 
 const LIMITE_IMPORTS_POR_HORA = 5;
 
+// parsed.error.flatten() dá um objeto (fieldErrors/formErrors), sem indicar
+// QUAL linha do array falhou — .issues tem o path completo (ex.:
+// ["clientes", 2, "empresa"]), o que dá pra virar uma mensagem no mesmo
+// formato "Sheet X, linha N: campo — motivo" que a RPC já usa. Sem isso,
+// details virava um objeto e o front (que só sabe extrair string) caía de
+// volta no rótulo genérico "Payload inválido".
+function formatarErroZod(error: z.ZodError): string {
+  return error.issues
+    .map((issue) => {
+      const [sheet, indice, ...resto] = issue.path;
+      if ((sheet === "clientes" || sheet === "pagamentos") && typeof indice === "number") {
+        const nomeSheet = sheet === "clientes" ? "CLIENTES" : "PAGAMENTOS";
+        const campo = resto.join(".") || "(linha)";
+        return `Sheet ${nomeSheet}, linha ${indice + 1}: ${campo} — ${issue.message}`;
+      }
+      return `${issue.path.join(".") || "payload"}: ${issue.message}`;
+    })
+    .join("; ");
+}
+
 // Duplicado de USER_ROLES (lib/auth.ts) de propósito: esse arquivo tem
 // useState/useEffect (é pensado pra rodar no client) e não pode ser
 // importado por uma API route server-side.
@@ -56,11 +76,9 @@ export async function POST(request: NextRequest) {
 
   const parsed = payloadSchema.safeParse(body);
   if (!parsed.success) {
-    console.error("[importar-dados] validação Zod falhou:", JSON.stringify(parsed.error.flatten()));
-    return NextResponse.json(
-      { error: "Payload inválido", details: parsed.error.flatten() },
-      { status: 400 }
-    );
+    const detalhes = formatarErroZod(parsed.error);
+    console.error("[importar-dados] validação Zod falhou:", detalhes);
+    return NextResponse.json({ error: "Payload inválido", details: detalhes }, { status: 400 });
   }
 
   const { usuarioRole, nomeArquivo, clientes, pagamentos } = parsed.data;
