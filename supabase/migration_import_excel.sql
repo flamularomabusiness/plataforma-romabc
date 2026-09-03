@@ -15,6 +15,28 @@
 -- vazio) — só cliente_id, produto_id e une_id são obrigatórios de fato, então
 -- o formato simplificado do Excel (sem consultora, sem pessoas) é suficiente.
 --
+-- CORREÇÃO 1 (bug: contrato recorrente importado só gerava 1 pagamento):
+-- todo contrato criado por aqui é sempre tipo_pagamento = 'recorrente' (linha
+-- logo abaixo do insert em contratos), mas a função só inserida os pagamentos
+-- que vinham na sheet PAGAMENTOS — se o usuário listasse só 1 linha por
+-- empresa (em vez de 12, uma por mês), só 1 pagamento era criado. Corrigido
+-- gerando as 12 parcelas mensais automaticamente (mesmo cálculo de data —
+-- respeita o dia do mês de data_inicio, com fallback pro último dia em meses
+-- mais curtos — já usado em criar_contrato_completo, migration_tipo_pagamento.sql)
+-- assim que cada contrato é criado.
+--
+-- CORREÇÃO 2 (bug: import gerava 13 parcelas em vez de 12): a primeira versão
+-- desta correção deixava a sheet PAGAMENTOS inserir uma parcela NOVA quando a
+-- Data Vencimento da linha não batia com nenhum dos 12 meses já gerados — na
+-- prática, isso permitia uma 13ª parcela sempre que a planilha ainda trouxesse
+-- uma linha de mês fora da janela do contrato (testado e reproduzido: 12
+-- meses gerados + 1 linha da sheet num mês não coberto = 13 pagamentos).
+-- Corrigido: uma linha da sheet PAGAMENTOS agora só pode ATUALIZAR uma das 12
+-- parcelas já geradas (ex.: marcar um mês específico como PAGO, com data
+-- real) — se a Data Vencimento não cair em nenhum dos 12 meses do contrato, a
+-- importação inteira é barrada com um erro claro, em vez de silenciosamente
+-- virar uma 13ª parcela ou ser ignorada.
+--
 -- Execute no SQL Editor do Supabase. Idempotente.
 
 create table if not exists importacoes (
@@ -56,6 +78,11 @@ declare
   v_contrato_ref text;
   v_data_vencimento date;
   v_data_pagamento date;
+  v_valor_mensal numeric(14, 2);
+  v_data_venc date;
+  v_dias_no_mes int;
+  v_pagamento_existente_id uuid;
+  i int;
 begin
   v_idx := 0;
   for v_cliente in select * from jsonb_array_elements(coalesce(payload->'clientes', '[]'::jsonb))
@@ -110,6 +137,38 @@ begin
 
     v_mapa_contratos := jsonb_set(v_mapa_contratos, array[v_nome_empresa], to_jsonb(v_contrato_id::text));
     v_clientes_count := v_clientes_count + 1;
+
+    -- Contrato importado é sempre 'recorrente' (ver insert acima) — gera as
+    -- 12 parcelas mensais projetadas aqui, na hora da criação. A sheet
+    -- PAGAMENTOS (loop abaixo) pode depois sobrescrever qualquer uma destas
+    -- (ex.: marcar um mês como já PAGO), mas nunca precisa mais trazer as 12
+    -- linhas manualmente pra o contrato ganhar seus pagamentos.
+    v_valor_mensal := (v_cliente->>'valor')::numeric;
+    for i in 0..11 loop
+      if i = 0 then
+        v_data_venc := v_data_inicio;
+      else
+        v_dias_no_mes := extract(
+          day from (
+            date_trunc('month', v_data_inicio + (i || ' months')::interval) + interval '1 month - 1 day'
+          )
+        )::int;
+        v_data_venc := date_trunc('month', v_data_inicio + (i || ' months')::interval)::date
+                       + (least(v_dia_vencimento, v_dias_no_mes) - 1);
+      end if;
+
+      insert into pagamentos_projetados (
+        contrato_id, mes, ano, valor_projetado, data_vencimento, status
+      ) values (
+        v_contrato_id,
+        extract(month from v_data_venc)::smallint,
+        extract(year from v_data_venc)::int,
+        v_valor_mensal,
+        v_data_venc,
+        'PROJETADO'
+      );
+      v_pagamentos_count := v_pagamentos_count + 1;
+    end loop;
   end loop;
 
   v_idx := 0;
@@ -136,18 +195,33 @@ begin
         v_idx, v_nome_empresa;
     end if;
 
-    insert into pagamentos_projetados (
-      contrato_id, mes, ano, valor_projetado, data_vencimento, status, data_pagamento_real
-    ) values (
-      v_contrato_ref::uuid,
-      extract(month from v_data_vencimento)::smallint,
-      extract(year from v_data_vencimento)::int,
-      (v_pagamento->>'valor')::numeric,
-      v_data_vencimento,
-      v_pagamento->>'status',
-      nullif(v_pagamento->>'data_pagamento', '')::date
-    );
-    v_pagamentos_count := v_pagamentos_count + 1;
+    -- O contrato já ganhou EXATAMENTE 12 parcelas PROJETADAS no loop de
+    -- CLIENTES acima (uma por mês, a partir de data_inicio). Uma linha da
+    -- sheet PAGAMENTOS só pode ATUALIZAR uma dessas 12 (ex.: marcar um mês
+    -- específico como PAGO com data real) — nunca criar uma 13ª parcela.
+    -- Se a Data Vencimento da linha não cair em nenhum dos 12 meses gerados
+    -- pro contrato daquela empresa, é sinal de planilha desalinhada com
+    -- data_inicio (ex.: sheet ainda tem uma linha de um mês fora do intervalo
+    -- do contrato) — melhor barrar a importação inteira (raise, como as
+    -- outras validações desta função) do que silenciosamente virar um 13º
+    -- pagamento ou ficar perdido sem nenhum efeito.
+    select id into v_pagamento_existente_id
+    from pagamentos_projetados
+    where contrato_id = v_contrato_ref::uuid
+      and mes = extract(month from v_data_vencimento)::smallint
+      and ano = extract(year from v_data_vencimento)::int;
+
+    if v_pagamento_existente_id is null then
+      raise exception 'Sheet PAGAMENTOS, linha %: Data Vencimento "%" (empresa: %) não corresponde a nenhum dos 12 meses gerados automaticamente para este contrato a partir da Data Início — ajuste a data para um mês dentro desse intervalo',
+        v_idx, to_char(v_data_vencimento, 'DD/MM/YYYY'), v_nome_empresa;
+    end if;
+
+    update pagamentos_projetados set
+      valor_projetado = (v_pagamento->>'valor')::numeric,
+      data_vencimento = v_data_vencimento,
+      status = v_pagamento->>'status',
+      data_pagamento_real = nullif(v_pagamento->>'data_pagamento', '')::date
+    where id = v_pagamento_existente_id;
   end loop;
 
   return jsonb_build_object(
