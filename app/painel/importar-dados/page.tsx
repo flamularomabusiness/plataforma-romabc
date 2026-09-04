@@ -100,22 +100,6 @@ export default function ImportarDadosPage() {
       const empresasDoArquivo = new Set(clientesValidados.map((l) => l.dados.empresa));
       const pagamentosValidados = validarLinhasPagamentos(pagamentosBrutos, empresasDoArquivo);
 
-      // Debug de datas: compara a célula bruta (como o exceljs devolveu) com
-      // o resultado já parseado (o que de fato vai pro payload da API), pra
-      // investigar sem achismo qualquer suspeita de dia errado/timezone.
-      console.log("[importar-dados] datas — bruto (exceljs) vs parseado, 3 primeiras linhas de PAGAMENTOS:");
-      pagamentosBrutos.slice(0, 3).forEach((bruto, i) => {
-        const raw = bruto["data vencimento"];
-        console.log(`  linha ${i + 1}:`, {
-          empresa: bruto["empresa"],
-          raw,
-          raw_type: raw instanceof Date ? "Date" : typeof raw,
-          raw_local: raw instanceof Date ? `${raw.getFullYear()}-${raw.getMonth() + 1}-${raw.getDate()}` : null,
-          raw_iso: raw instanceof Date ? raw.toISOString() : null,
-          parseado: pagamentosValidados[i]?.dados.data_vencimento ?? null,
-        });
-      });
-
       setPreview(construirPreview(file.name, clientesValidados, pagamentosValidados));
       setEtapa("preview");
     } catch (error) {

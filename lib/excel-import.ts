@@ -44,62 +44,28 @@ export function formatarCNPJ(cnpjBruto: string): string {
 // formatadas como data na planilha, mas o CEO pode ter digitado como texto.
 // ---------------------------------------------------------------------------
 
-// DEBUG TEMPORÁRIO — remover depois de confirmar a causa do "dia errado" no
-// import. console.log não deu pra confirmar se a Vercel já tinha deployado a
-// versão nova, então isso usa alert() (impossível de não ver), só na PRIMEIRA
-// célula de "PAGAMENTOS, Data Vencimento" (contexto passado pelo call site
-// abaixo) — não em toda data (senão travaria o import inteiro, já que uma
-// planilha real tem dezenas de células de data) e não nas outras colunas de
-// data (data_inicio/data_pagamento), pra focar exatamente na célula que o
-// usuário suspeita ("PAGAMENTOS linha 2"). Remover assim que a causa for
-// confirmada, pra não ficar interrompendo imports de verdade depois.
-let _debugAlertaDataJaMostrado = false;
-const CONTEXTO_DEBUG_ALERTA = "PAGAMENTOS - Data Vencimento";
-
-export function parseDataCelula(valor: unknown, contexto?: string): string | null {
-  const dispararAlertaSeAplicavel = (bruto: string, tipo: string, resultado: string | null) => {
-    if (
-      contexto !== CONTEXTO_DEBUG_ALERTA ||
-      _debugAlertaDataJaMostrado ||
-      typeof window === "undefined"
-    ) {
-      return;
-    }
-    _debugAlertaDataJaMostrado = true;
-    window.alert(
-      `DEBUG DATA (${contexto}, primeira linha):\n\n` +
-        `Bruto: ${bruto}\n` +
-        `Tipo: ${tipo}\n` +
-        `Parseado: ${resultado}`
-    );
-  };
-
+// Date object -> "YYYY-MM-DD" usando getters locais (não toISOString: isso
+// desloca um dia pra trás em timezones à frente de UTC). String "DD/MM/AAAA"
+// -> "YYYY-MM-DD". Qualquer outro formato -> null.
+export function formatarDataExcel(valor: unknown): string | null {
   if (valor instanceof Date) {
     if (Number.isNaN(valor.getTime())) return null;
-    const resultado = `${valor.getFullYear()}-${String(valor.getMonth() + 1).padStart(2, "0")}-${String(
-      valor.getDate()
-    ).padStart(2, "0")}`;
-    dispararAlertaSeAplicavel(`${valor.toISOString()} (local: ${valor.toString()})`, "object (Date)", resultado);
-    return resultado;
+    const ano = valor.getFullYear();
+    const mes = String(valor.getMonth() + 1).padStart(2, "0");
+    const dia = String(valor.getDate()).padStart(2, "0");
+    return `${ano}-${mes}-${dia}`;
   }
+
   if (typeof valor === "string") {
     const match = valor.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (!match) {
-      dispararAlertaSeAplicavel(`"${valor}"`, "string", null);
-      return null;
-    }
+    if (!match) return null;
     const dia = Number(match[1]);
     const mes = Number(match[2]);
     const ano = Number(match[3]);
-    if (mes < 1 || mes > 12 || dia < 1 || dia > 31) {
-      dispararAlertaSeAplicavel(`"${valor}"`, "string", null);
-      return null;
-    }
-    const resultado = `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-    dispararAlertaSeAplicavel(`"${valor}"`, "string", resultado);
-    return resultado;
+    if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+    return `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
   }
-  dispararAlertaSeAplicavel(String(valor), typeof valor, null);
+
   return null;
 }
 
@@ -222,7 +188,7 @@ export function validarLinhasClientes(
     const produto = textoCelula(linha["produto"]);
     const statusBruto = textoCelula(linha["status"]).toUpperCase();
     const valor = parseValorCelula(linha["valor"]);
-    const dataInicio = parseDataCelula(linha["data inicio"]);
+    const dataInicio = formatarDataExcel(linha["data inicio"]);
 
     if (!empresa) marcarErro("Empresa é obrigatória");
     if (!cnpjBruto) marcarErro("CNPJ é obrigatório");
@@ -284,11 +250,8 @@ export function validarLinhasPagamentos(
     const empresa = textoCelula(linha["empresa"]);
     const statusBruto = textoCelula(linha["status"]).toUpperCase();
     const valor = parseValorCelula(linha["valor"]);
-    const dataVencimento = parseDataCelula(
-      linha["data vencimento"],
-      index === 0 ? "PAGAMENTOS - Data Vencimento" : undefined
-    );
-    const dataPagamento = parseDataCelula(linha["data pagamento"]);
+    const dataVencimento = formatarDataExcel(linha["data vencimento"]);
+    const dataPagamento = formatarDataExcel(linha["data pagamento"]);
 
     if (!empresa) marcarErro("Empresa é obrigatória");
     else if (!empresasDoArquivo.has(empresa)) {
