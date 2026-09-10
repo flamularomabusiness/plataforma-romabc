@@ -7,35 +7,51 @@
 -- função, não dela — assim uma importação que falha também fica registrada.)
 -- e a função importar_dados_excel(payload), que roda a importação inteira
 -- numa única transação: qualquer erro (UNE/Produto não encontrado, empresa de
--- pagamento não encontrada, status inválido, valor/data mal formatado) reverte
--- TUDO (nenhum cliente/contrato/pagamento fica inserido pela metade).
+-- pagamento não encontrada, status inválido, valor/data mal formatado,
+-- parcelas não batendo com o tipo de pagamento) reverte TUDO (nenhum
+-- cliente/contrato/pagamento fica inserido pela metade — inclusive entre
+-- empresas diferentes do mesmo arquivo: um erro na linha 40 desfaz as 39
+-- anteriores também, é tudo ou nada pro arquivo inteiro).
 --
 -- Verificado contra o banco antes de escrever esta migration: contratos não
 -- exige consultora_id nem contexto_perfil_cliente (ambos aceitam null/default
 -- vazio) — só cliente_id, produto_id e une_id são obrigatórios de fato, então
 -- o formato simplificado do Excel (sem consultora, sem pessoas) é suficiente.
 --
--- CORREÇÃO 1 (bug: contrato recorrente importado só gerava 1 pagamento):
--- todo contrato criado por aqui é sempre tipo_pagamento = 'recorrente' (linha
--- logo abaixo do insert em contratos), mas a função só inserida os pagamentos
--- que vinham na sheet PAGAMENTOS — se o usuário listasse só 1 linha por
--- empresa (em vez de 12, uma por mês), só 1 pagamento era criado. Corrigido
--- gerando as 12 parcelas mensais automaticamente (mesmo cálculo de data —
--- respeita o dia do mês de data_inicio, com fallback pro último dia em meses
--- mais curtos — já usado em criar_contrato_completo, migration_tipo_pagamento.sql)
--- assim que cada contrato é criado.
+-- Assinatura mantida igual (payload jsonb com clientes/pagamentos dentro) —
+-- app/api/importar-dados/route.ts chama com
+-- supabase.rpc("importar_dados_excel", { payload: { clientes, pagamentos } }),
+-- então não há motivo pra trocar pra parâmetros nomeados (p_clientes/
+-- p_pagamentos): mudar a assinatura só pra "bater com o pseudocódigo" ia
+-- quebrar o único chamador real sem ganhar nada.
 --
--- CORREÇÃO 2 (bug: import gerava 13 parcelas em vez de 12): a primeira versão
--- desta correção deixava a sheet PAGAMENTOS inserir uma parcela NOVA quando a
--- Data Vencimento da linha não batia com nenhum dos 12 meses já gerados — na
--- prática, isso permitia uma 13ª parcela sempre que a planilha ainda trouxesse
--- uma linha de mês fora da janela do contrato (testado e reproduzido: 12
--- meses gerados + 1 linha da sheet num mês não coberto = 13 pagamentos).
--- Corrigido: uma linha da sheet PAGAMENTOS agora só pode ATUALIZAR uma das 12
--- parcelas já geradas (ex.: marcar um mês específico como PAGO, com data
--- real) — se a Data Vencimento não cair em nenhum dos 12 meses do contrato, a
--- importação inteira é barrada com um erro claro, em vez de silenciosamente
--- virar uma 13ª parcela ou ser ignorada.
+-- REESCRITA (recorrente / à vista / parcelado):
+-- Até esta versão, todo contrato importado era sempre 'recorrente' e a RPC
+-- gerava as 12 parcelas sozinha a partir de Data Início — a sheet PAGAMENTOS
+-- só servia pra sobrescrever alguma parcela já gerada (ex.: marcar um mês
+-- como PAGO). Isso não dava pra estender pra "à vista" (1 pagamento) nem
+-- "parcelado" (N parcelas com valores/datas livres) sem regras conflitantes.
+--
+-- Modelo novo: CLIENTES ganha as colunas tipo_pagamento e numero_parcelas: o
+-- tipo escolhe QUAL validação roda, e a sheet PAGAMENTOS (agora com uma
+-- coluna nro_parcela) é a fonte direta dos pagamentos pra QUALQUER tipo — a
+-- RPC não gera mais nada sozinha, só valida que o conjunto de linhas de
+-- PAGAMENTOS daquela empresa é coerente com o tipo antes de inserir:
+--   • recorrente: exatamente 12 linhas, nro_parcela 1..12 sem furos nem
+--     repetição, cada Data Vencimento entre Data Início e Data Início + 12
+--     meses.
+--   • à vista (aceita "à vista"/"a vista"/"avista"/"venda unica" na sheet —
+--     internamente vira 'venda_unica', o mesmo valor usado no formulário de
+--     Novo Contrato): exatamente 1 linha, nro_parcela = 1, Data Vencimento a
+--     no máximo 5 dias de Data Início (pra qualquer lado).
+--   • parcelado: exatamente numero_parcelas linhas (vindo de CLIENTES),
+--     nro_parcela 1..N sem furos nem repetição, datas em ordem estritamente
+--     crescente, cada Data Vencimento dentro de Data Início ± N meses, e a
+--     soma dos valores das parcelas batendo com o Valor do cliente (tolerância
+--     de 1 centavo, pra erro de arredondamento).
+-- Qualquer falha nessas checagens vira um raise exception com o nome da
+-- empresa e o motivo específico (contagem errada, parcela faltando, data fora
+-- da janela, soma não batendo) — nunca um erro genérico.
 --
 -- Execute no SQL Editor do Supabase. Idempotente.
 
@@ -61,7 +77,6 @@ language plpgsql
 as $$
 declare
   v_cliente jsonb;
-  v_pagamento jsonb;
   v_idx int;
   v_cliente_id uuid;
   v_une_id uuid;
@@ -71,17 +86,26 @@ declare
   v_dia_vencimento smallint;
   v_clientes_count int := 0;
   v_pagamentos_count int := 0;
-  -- nome da empresa (como veio na sheet CLIENTES) -> contrato_id criado/atualizado
-  -- nesta mesma execução. Pagamentos só resolvem contra empresas DESTE arquivo.
-  v_mapa_contratos jsonb := '{}'::jsonb;
   v_nome_empresa text;
-  v_contrato_ref text;
-  v_data_vencimento date;
-  v_data_pagamento date;
-  v_valor_mensal numeric(14, 2);
+  v_tipo_pagamento text;
+  v_tipo_bruto text;
+  v_numero_parcelas int;
+  v_valor_cliente numeric(14, 2);
+  -- pagamentos daquela empresa, já ordenados por nro_parcela.
+  v_pags_arr jsonb[];
+  v_qtd int;
+  v_esperado int[];
+  v_encontrados int[];
+  v_faltando int[];
+  v_pag jsonb;
+  v_nro int;
   v_data_venc date;
-  v_dias_no_mes int;
-  v_pagamento_existente_id uuid;
+  v_data_pagamento date;
+  v_status_pag text;
+  v_soma numeric(14, 2);
+  v_janela_ini date;
+  v_janela_fim date;
+  v_data_anterior date;
   i int;
 begin
   v_idx := 0;
@@ -109,6 +133,186 @@ begin
         v_idx, v_cliente->>'data_inicio', v_nome_empresa;
     end;
 
+    begin
+      v_valor_cliente := (v_cliente->>'valor')::numeric;
+    exception when others then
+      raise exception 'Sheet CLIENTES, linha %: Valor inválido "%" (empresa: %)',
+        v_idx, v_cliente->>'valor', v_nome_empresa;
+    end;
+
+    -- Normaliza tipo_pagamento: aceita variações de acento/caixa/espaço na
+    -- planilha, mas internamente só existem 3 valores (os mesmos do
+    -- formulário de Novo Contrato — 'venda_unica' é o "à vista"). "à" é o
+    -- único acento que de fato aparece em algum valor aceito — troca só ele
+    -- em vez de um translate() com tabela de acentos genérica (frágil: listas
+    -- from/to de tamanhos diferentes corrompem o mapeamento em silêncio).
+    v_tipo_bruto := lower(trim(coalesce(v_cliente->>'tipo_pagamento', '')));
+    v_tipo_bruto := replace(v_tipo_bruto, 'à', 'a');
+    v_tipo_bruto := regexp_replace(v_tipo_bruto, '[\s_-]+', ' ', 'g');
+
+    if v_tipo_bruto = 'recorrente' then
+      v_tipo_pagamento := 'recorrente';
+    elsif v_tipo_bruto in ('a vista', 'avista', 'venda unica', 'vendaunica') then
+      v_tipo_pagamento := 'venda_unica';
+    elsif v_tipo_bruto = 'parcelado' then
+      v_tipo_pagamento := 'parcelado';
+    else
+      raise exception 'Sheet CLIENTES, linha %: Tipo Pagamento "%" inválido (empresa: %) — use recorrente, à vista ou parcelado',
+        v_idx, v_cliente->>'tipo_pagamento', v_nome_empresa;
+    end if;
+
+    v_numero_parcelas := nullif(v_cliente->>'numero_parcelas', '')::int;
+    if v_tipo_pagamento = 'parcelado' and (v_numero_parcelas is null or v_numero_parcelas < 1) then
+      raise exception 'Sheet CLIENTES, linha %: Número de Parcelas inválido para tipo parcelado (empresa: %)',
+        v_idx, v_nome_empresa;
+    end if;
+
+    -- Pagamentos desta empresa (de payload->'pagamentos'), ordenados por
+    -- nro_parcela. Cast isolado num bloco próprio pra dar um erro claro em
+    -- vez de deixar vazar "invalid input syntax for type integer" cru.
+    begin
+      select array_agg(p order by (p->>'nro_parcela')::int)
+      into v_pags_arr
+      from jsonb_array_elements(coalesce(payload->'pagamentos', '[]'::jsonb)) p
+      where p->>'empresa' = v_nome_empresa;
+    exception when others then
+      raise exception 'Empresa %: Nº Parcela (nro_parcela) contém valor não numérico em algum pagamento',
+        v_nome_empresa;
+    end;
+
+    v_qtd := coalesce(array_length(v_pags_arr, 1), 0);
+
+    -- status PAGO exige Data Pagamento — vale pra qualquer tipo, então
+    -- verifica aqui, antes de qualquer insert (cliente/contrato inclusive),
+    -- em vez de deixar só pro loop final de inserção.
+    for i in 1..v_qtd loop
+      v_pag := v_pags_arr[i];
+      if upper(trim(coalesce(v_pag->>'status', ''))) = 'PAGO' and nullif(v_pag->>'data_pagamento', '') is null then
+        raise exception 'Empresa %, linha %: status PAGO exige Data Pagamento', v_nome_empresa, i;
+      end if;
+    end loop;
+
+    -- =====================================================================
+    -- Validação específica por tipo de pagamento.
+    -- =====================================================================
+    if v_tipo_pagamento = 'recorrente' then
+      if v_qtd != 12 then
+        raise exception 'Empresa %: tipo recorrente precisa de 12 parcelas, encontrado %', v_nome_empresa, v_qtd;
+      end if;
+
+      select array_agg(gs) into v_esperado from generate_series(1, 12) gs;
+      select array_agg(distinct (p->>'nro_parcela')::int order by (p->>'nro_parcela')::int)
+      into v_encontrados
+      from unnest(v_pags_arr) p;
+
+      if v_encontrados is distinct from v_esperado then
+        select array_agg(gs) into v_faltando
+        from generate_series(1, 12) gs
+        where gs != all(coalesce(v_encontrados, array[]::int[]));
+        raise exception 'Empresa %: Nº Parcela inválido (esperado 1-12, faltando %)',
+          v_nome_empresa, array_to_string(v_faltando, ', ');
+      end if;
+
+      v_janela_ini := v_data_inicio;
+      v_janela_fim := v_data_inicio + interval '12 months';
+
+      for i in 1..v_qtd loop
+        v_pag := v_pags_arr[i];
+        begin
+          v_data_venc := (v_pag->>'data_vencimento')::date;
+        exception when others then
+          raise exception 'Empresa %, linha %: Data Vencimento inválida "%"',
+            v_nome_empresa, i, v_pag->>'data_vencimento';
+        end;
+        if v_data_venc < v_janela_ini or v_data_venc > v_janela_fim then
+          raise exception 'Empresa %, linha %: Data Vencimento % está fora da janela % - %',
+            v_nome_empresa, i, to_char(v_data_venc, 'DD/MM/YYYY'),
+            to_char(v_janela_ini, 'DD/MM/YYYY'), to_char(v_janela_fim, 'DD/MM/YYYY');
+        end if;
+      end loop;
+
+    elsif v_tipo_pagamento = 'venda_unica' then
+      if v_qtd != 1 then
+        raise exception 'Empresa %: à vista precisa de exatamente 1 parcela, encontrado %', v_nome_empresa, v_qtd;
+      end if;
+
+      v_pag := v_pags_arr[1];
+      v_nro := nullif(v_pag->>'nro_parcela', '')::int;
+      if v_nro is distinct from 1 then
+        raise exception 'Empresa %: Nº Parcela inválido (esperado 1, encontrado %)', v_nome_empresa, v_nro;
+      end if;
+
+      begin
+        v_data_venc := (v_pag->>'data_vencimento')::date;
+      exception when others then
+        raise exception 'Empresa %: Data Vencimento inválida "%"', v_nome_empresa, v_pag->>'data_vencimento';
+      end;
+      if abs(v_data_venc - v_data_inicio) > 5 then
+        raise exception 'Empresa %: Data Vencimento % está fora da tolerância de ±5 dias da Data Início %',
+          v_nome_empresa, to_char(v_data_venc, 'DD/MM/YYYY'), to_char(v_data_inicio, 'DD/MM/YYYY');
+      end if;
+
+    elsif v_tipo_pagamento = 'parcelado' then
+      if v_qtd != v_numero_parcelas then
+        raise exception 'Empresa %: parcelado precisa de % parcelas, encontrado %',
+          v_nome_empresa, v_numero_parcelas, v_qtd;
+      end if;
+
+      select array_agg(gs) into v_esperado from generate_series(1, v_numero_parcelas) gs;
+      select array_agg(distinct (p->>'nro_parcela')::int order by (p->>'nro_parcela')::int)
+      into v_encontrados
+      from unnest(v_pags_arr) p;
+
+      if v_encontrados is distinct from v_esperado then
+        select array_agg(gs) into v_faltando
+        from generate_series(1, v_numero_parcelas) gs
+        where gs != all(coalesce(v_encontrados, array[]::int[]));
+        raise exception 'Empresa %: Nº Parcela inválido (esperado 1-%, faltando %)',
+          v_nome_empresa, v_numero_parcelas, array_to_string(v_faltando, ', ');
+      end if;
+
+      v_janela_ini := v_data_inicio - (v_numero_parcelas || ' months')::interval;
+      v_janela_fim := v_data_inicio + (v_numero_parcelas || ' months')::interval;
+      v_data_anterior := null;
+      v_soma := 0;
+
+      for i in 1..v_qtd loop
+        v_pag := v_pags_arr[i];
+        begin
+          v_data_venc := (v_pag->>'data_vencimento')::date;
+        exception when others then
+          raise exception 'Empresa %, linha %: Data Vencimento inválida "%"',
+            v_nome_empresa, i, v_pag->>'data_vencimento';
+        end;
+
+        if v_data_venc < v_janela_ini or v_data_venc > v_janela_fim then
+          raise exception 'Empresa %, linha %: Data Vencimento % está fora da janela % - %',
+            v_nome_empresa, i, to_char(v_data_venc, 'DD/MM/YYYY'),
+            to_char(v_janela_ini, 'DD/MM/YYYY'), to_char(v_janela_fim, 'DD/MM/YYYY');
+        end if;
+
+        if v_data_anterior is not null and v_data_venc <= v_data_anterior then
+          raise exception 'Empresa %, linha %: datas das parcelas devem estar em ordem crescente (% não é depois de %)',
+            v_nome_empresa, i, to_char(v_data_venc, 'DD/MM/YYYY'), to_char(v_data_anterior, 'DD/MM/YYYY');
+        end if;
+        v_data_anterior := v_data_venc;
+
+        begin
+          v_soma := v_soma + (v_pag->>'valor')::numeric;
+        exception when others then
+          raise exception 'Empresa %, linha %: Valor inválido "%"', v_nome_empresa, i, v_pag->>'valor';
+        end;
+      end loop;
+
+      if abs(v_soma - v_valor_cliente) > 0.01 then
+        raise exception 'Empresa %: soma das parcelas (%) não bate com valor total (%)',
+          v_nome_empresa, v_soma, v_valor_cliente;
+      end if;
+    end if;
+
+    -- =====================================================================
+    -- Validação passou — upsert do cliente e insert do contrato/pagamentos.
+    -- =====================================================================
     select id into v_cliente_id from clientes where cpf_cnpj_responsavel = v_cliente->>'cnpj';
     if v_cliente_id is null then
       insert into clientes (nome_razao_social, cpf_cnpj_responsavel, status, ativo)
@@ -125,103 +329,48 @@ begin
     v_dia_vencimento := extract(day from v_data_inicio)::smallint;
 
     insert into contratos (
-      cliente_id, produto_id, une_id, valor_mensal, data_inicio_primeiro_pagamento,
-      data_vencimento_mensal, plano_contratado, tipo_pagamento, status
+      cliente_id, produto_id, une_id, plano_contratado, tipo_pagamento, status,
+      valor_mensal, data_inicio_primeiro_pagamento, data_vencimento_mensal,
+      valor_total, numero_parcelas
     ) values (
-      v_cliente_id, v_produto_id, v_une_id, (v_cliente->>'valor')::numeric, v_data_inicio,
-      v_dia_vencimento, 'Padrão', 'recorrente', 'ativo'
+      v_cliente_id, v_produto_id, v_une_id, 'Padrão', v_tipo_pagamento, 'ativo',
+      case when v_tipo_pagamento = 'recorrente' then v_valor_cliente else null end,
+      v_data_inicio,
+      case when v_tipo_pagamento = 'recorrente' then v_dia_vencimento else null end,
+      v_valor_cliente,
+      case when v_tipo_pagamento = 'parcelado' then v_numero_parcelas else null end
     )
     returning id into v_contrato_id;
 
     insert into contrato_empresas (contrato_id, cliente_id) values (v_contrato_id, v_cliente_id);
-
-    v_mapa_contratos := jsonb_set(v_mapa_contratos, array[v_nome_empresa], to_jsonb(v_contrato_id::text));
     v_clientes_count := v_clientes_count + 1;
 
-    -- Contrato importado é sempre 'recorrente' (ver insert acima) — gera as
-    -- 12 parcelas mensais projetadas aqui, na hora da criação. A sheet
-    -- PAGAMENTOS (loop abaixo) pode depois sobrescrever qualquer uma destas
-    -- (ex.: marcar um mês como já PAGO), mas nunca precisa mais trazer as 12
-    -- linhas manualmente pra o contrato ganhar seus pagamentos.
-    v_valor_mensal := (v_cliente->>'valor')::numeric;
-    for i in 0..11 loop
-      if i = 0 then
-        v_data_venc := v_data_inicio;
-      else
-        v_dias_no_mes := extract(
-          day from (
-            date_trunc('month', v_data_inicio + (i || ' months')::interval) + interval '1 month - 1 day'
-          )
-        )::int;
-        v_data_venc := date_trunc('month', v_data_inicio + (i || ' months')::interval)::date
-                       + (least(v_dia_vencimento, v_dias_no_mes) - 1);
+    -- Insere exatamente as linhas de PAGAMENTOS já validadas acima — nenhum
+    -- tipo gera parcela sozinho, todos vêm da sheet.
+    for i in 1..v_qtd loop
+      v_pag := v_pags_arr[i];
+      v_data_venc := (v_pag->>'data_vencimento')::date;
+      v_data_pagamento := nullif(v_pag->>'data_pagamento', '')::date;
+
+      v_status_pag := upper(trim(coalesce(v_pag->>'status', '')));
+      if v_status_pag not in ('PROJETADO', 'PAGO', 'ATRASADO', 'INADIMPLENTE') then
+        v_status_pag := 'PROJETADO';
       end if;
 
       insert into pagamentos_projetados (
-        contrato_id, mes, ano, valor_projetado, data_vencimento, status
+        contrato_id, numero_parcela, mes, ano, valor_projetado, data_vencimento, status, data_pagamento_real
       ) values (
         v_contrato_id,
+        nullif(v_pag->>'nro_parcela', '')::int,
         extract(month from v_data_venc)::smallint,
         extract(year from v_data_venc)::int,
-        v_valor_mensal,
+        (v_pag->>'valor')::numeric,
         v_data_venc,
-        'PROJETADO'
+        v_status_pag,
+        v_data_pagamento
       );
       v_pagamentos_count := v_pagamentos_count + 1;
     end loop;
-  end loop;
-
-  v_idx := 0;
-  for v_pagamento in select * from jsonb_array_elements(coalesce(payload->'pagamentos', '[]'::jsonb))
-  loop
-    v_idx := v_idx + 1;
-    v_nome_empresa := v_pagamento->>'empresa';
-    v_contrato_ref := v_mapa_contratos->>v_nome_empresa;
-    if v_contrato_ref is null then
-      raise exception 'Sheet PAGAMENTOS, linha %: empresa "%" não encontrada na sheet CLIENTES deste arquivo',
-        v_idx, v_nome_empresa;
-    end if;
-
-    begin
-      v_data_vencimento := (v_pagamento->>'data_vencimento')::date;
-    exception when others then
-      raise exception 'Sheet PAGAMENTOS, linha %: Data Vencimento inválida "%" (empresa: %)',
-        v_idx, v_pagamento->>'data_vencimento', v_nome_empresa;
-    end;
-
-    v_data_pagamento := nullif(v_pagamento->>'data_pagamento', '');
-    if v_pagamento->>'status' = 'PAGO' and v_data_pagamento is null then
-      raise exception 'Sheet PAGAMENTOS, linha %: status PAGO exige Data Pagamento (empresa: %)',
-        v_idx, v_nome_empresa;
-    end if;
-
-    -- O contrato já ganhou EXATAMENTE 12 parcelas PROJETADAS no loop de
-    -- CLIENTES acima (uma por mês, a partir de data_inicio). Uma linha da
-    -- sheet PAGAMENTOS só pode ATUALIZAR uma dessas 12 (ex.: marcar um mês
-    -- específico como PAGO com data real) — nunca criar uma 13ª parcela.
-    -- Se a Data Vencimento da linha não cair em nenhum dos 12 meses gerados
-    -- pro contrato daquela empresa, é sinal de planilha desalinhada com
-    -- data_inicio (ex.: sheet ainda tem uma linha de um mês fora do intervalo
-    -- do contrato) — melhor barrar a importação inteira (raise, como as
-    -- outras validações desta função) do que silenciosamente virar um 13º
-    -- pagamento ou ficar perdido sem nenhum efeito.
-    select id into v_pagamento_existente_id
-    from pagamentos_projetados
-    where contrato_id = v_contrato_ref::uuid
-      and mes = extract(month from v_data_vencimento)::smallint
-      and ano = extract(year from v_data_vencimento)::int;
-
-    if v_pagamento_existente_id is null then
-      raise exception 'Sheet PAGAMENTOS, linha %: Data Vencimento "%" (empresa: %) não corresponde a nenhum dos 12 meses gerados automaticamente para este contrato a partir da Data Início — ajuste a data para um mês dentro desse intervalo',
-        v_idx, to_char(v_data_vencimento, 'DD/MM/YYYY'), v_nome_empresa;
-    end if;
-
-    update pagamentos_projetados set
-      valor_projetado = (v_pagamento->>'valor')::numeric,
-      data_vencimento = v_data_vencimento,
-      status = v_pagamento->>'status',
-      data_pagamento_real = nullif(v_pagamento->>'data_pagamento', '')::date
-    where id = v_pagamento_existente_id;
   end loop;
 
   return jsonb_build_object(

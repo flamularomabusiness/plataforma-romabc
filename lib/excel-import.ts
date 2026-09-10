@@ -157,8 +157,39 @@ export async function lerPlanilhaExcel(
 // Validação linha a linha.
 // ---------------------------------------------------------------------------
 
-const COLUNAS_CLIENTES_OBRIGATORIAS = ["empresa", "cnpj", "une", "produto", "valor", "status", "data inicio"];
-const COLUNAS_PAGAMENTOS_OBRIGATORIAS = ["empresa", "data vencimento", "valor", "status"];
+const COLUNAS_CLIENTES_OBRIGATORIAS = [
+  "empresa",
+  "cnpj",
+  "une",
+  "produto",
+  "valor",
+  "status",
+  "data inicio",
+  "tipo pagamento",
+  "numero parcelas",
+];
+const COLUNAS_PAGAMENTOS_OBRIGATORIAS = ["empresa", "nro parcela", "data vencimento", "valor", "status"];
+
+/**
+ * "recorrente" / "à vista" (e variações: "a vista", "avista", "venda unica")
+ * / "parcelado" -> um dos 3 valores canônicos usados em todo o resto do app
+ * (TIPOS_PAGAMENTO, lib/types.ts — o mesmo "venda_unica" do formulário de
+ * Novo Contrato). A RPC repete essa mesma normalização (é quem de fato
+ * valida) — aqui é só pra dar erro cedo, no preview, se o texto não bater
+ * com nada conhecido.
+ */
+export function normalizarTipoPagamento(bruto: string): "recorrente" | "venda_unica" | "parcelado" | null {
+  const limpo = bruto
+    .normalize("NFD")
+    .replace(DIACRITICOS_REGEX, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, " ");
+  if (limpo === "recorrente") return "recorrente";
+  if (["a vista", "avista", "venda unica", "vendaunica"].includes(limpo)) return "venda_unica";
+  if (limpo === "parcelado") return "parcelado";
+  return null;
+}
 
 export function verificarColunasObrigatorias(
   linhas: Record<string, unknown>[],
@@ -189,6 +220,14 @@ export function validarLinhasClientes(
     const statusBruto = textoCelula(linha["status"]).toUpperCase();
     const valor = parseValorCelula(linha["valor"]);
     const dataInicio = formatarDataExcel(linha["data inicio"]);
+    const tipoPagamentoBruto = textoCelula(linha["tipo pagamento"]);
+    const tipoPagamento = normalizarTipoPagamento(tipoPagamentoBruto);
+    const numeroParcelasBruto = linha["numero parcelas"];
+    const numeroParcelas =
+      typeof numeroParcelasBruto === "number"
+        ? numeroParcelasBruto
+        : Number(textoCelula(numeroParcelasBruto).replace(",", "."));
+    const numeroParcelasValido = Number.isInteger(numeroParcelas) && numeroParcelas > 0;
 
     if (!empresa) marcarErro("Empresa é obrigatória");
     if (!cnpjBruto) marcarErro("CNPJ é obrigatório");
@@ -214,6 +253,15 @@ export function validarLinhasClientes(
 
     if (!dataInicio) marcarErro(`Data Início inválida (${textoCelula(linha["data inicio"]) || "vazia"})`);
 
+    if (!tipoPagamentoBruto) marcarErro("Tipo Pagamento é obrigatório");
+    else if (!tipoPagamento) {
+      marcarErro(`Tipo Pagamento "${tipoPagamentoBruto}" inválido — use recorrente, à vista ou parcelado`);
+    }
+
+    if (tipoPagamento === "parcelado" && !numeroParcelasValido) {
+      marcarErro(`Número de Parcelas inválido para parcelado (${textoCelula(numeroParcelasBruto) || "vazio"})`);
+    }
+
     return {
       linha: index + 2, // +2: header é a linha 1 da planilha, dados começam na 2
       dados: {
@@ -224,6 +272,8 @@ export function validarLinhasClientes(
         valor: valor ?? 0,
         status: (STATUS_CLIENTE.includes(statusBruto as any) ? statusBruto : "ATIVO") as ImportClienteRow["status"],
         data_inicio: dataInicio ?? "",
+        tipo_pagamento: tipoPagamento ?? tipoPagamentoBruto,
+        numero_parcelas: numeroParcelasValido ? numeroParcelas : null,
       },
       severidade,
       mensagens,
@@ -252,10 +302,18 @@ export function validarLinhasPagamentos(
     const valor = parseValorCelula(linha["valor"]);
     const dataVencimento = formatarDataExcel(linha["data vencimento"]);
     const dataPagamento = formatarDataExcel(linha["data pagamento"]);
+    const nroParcelaBruto = linha["nro parcela"];
+    const nroParcela =
+      typeof nroParcelaBruto === "number" ? nroParcelaBruto : Number(textoCelula(nroParcelaBruto));
+    const nroParcelaValido = Number.isInteger(nroParcela) && nroParcela > 0;
 
     if (!empresa) marcarErro("Empresa é obrigatória");
     else if (!empresasDoArquivo.has(empresa)) {
       marcarErro(`Empresa "${empresa}" não está na sheet CLIENTES deste arquivo`);
+    }
+
+    if (!nroParcelaValido) {
+      marcarErro(`Nº Parcela inválido (${textoCelula(nroParcelaBruto) || "vazio"}) — use um número inteiro >= 1`);
     }
 
     if (!dataVencimento) {
@@ -281,6 +339,7 @@ export function validarLinhasPagamentos(
       linha: index + 2,
       dados: {
         empresa,
+        nro_parcela: nroParcelaValido ? nroParcela : null,
         data_vencimento: dataVencimento ?? "",
         valor: valor ?? 0,
         status: (STATUS_PAGAMENTO.includes(statusBruto as any)

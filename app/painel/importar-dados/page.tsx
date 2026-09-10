@@ -195,6 +195,8 @@ export default function ImportarDadosPage() {
                 { label: "Valor", render: (d) => formatBRL(d.valor) },
                 { label: "Status", render: (d) => d.status },
                 { label: "Data Início", render: (d) => formatDate(d.data_inicio) },
+                { label: "Tipo Pagamento", render: (d) => d.tipo_pagamento },
+                { label: "Nº Parcelas", render: (d) => d.numero_parcelas ?? "-" },
               ]}
             />
 
@@ -203,6 +205,7 @@ export default function ImportarDadosPage() {
               linhas={preview.pagamentos}
               colunas={[
                 { label: "Empresa", render: (d) => d.empresa },
+                { label: "Nº Parcela", render: (d) => d.nro_parcela ?? "-" },
                 { label: "Vencimento", render: (d) => formatDate(d.data_vencimento) },
                 { label: "Valor", render: (d) => formatBRL(d.valor) },
                 { label: "Status", render: (d) => d.status },

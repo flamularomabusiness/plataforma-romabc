@@ -364,6 +364,12 @@ export interface PagamentoAVistaCliente {
 // Import de dados via Excel (Gerente/Financeiro).
 // ---------------------------------------------------------------------------
 
+/**
+ * tipo_pagamento vem cru da sheet ("recorrente", "à vista", "parcelado" — ou
+ * variações de acentuação/caixa) — normalizado pra um dos 3 valores canônicos
+ * do resto do app (TIPOS_PAGAMENTO, lib/types.ts) só dentro da RPC, que é
+ * quem valida de fato; aqui fica como string pra não duplicar essa lógica.
+ */
 export interface ImportClienteRow {
   empresa: string;
   cnpj: string;
@@ -372,10 +378,15 @@ export interface ImportClienteRow {
   valor: number;
   status: StatusCliente;
   data_inicio: string;
+  tipo_pagamento: string;
+  /** Obrigatório (>=1) só quando tipo_pagamento normaliza pra "parcelado". */
+  numero_parcelas: number | null;
 }
 
 export interface ImportPagamentoRow {
   empresa: string;
+  /** Nº da parcela (1-based) — a RPC usa pra validar sequência 1..N sem furos. */
+  nro_parcela: number | null;
   data_vencimento: string;
   valor: number;
   status: StatusPagamento;

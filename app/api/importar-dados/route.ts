@@ -39,10 +39,16 @@ const clienteRowSchema = z.object({
   valor: z.number().positive(),
   status: z.enum(STATUS_CLIENTE),
   data_inicio: z.string().min(1),
+  // Normalização (recorrente/venda_unica/parcelado) e validação de fato
+  // (contagem de parcelas, sequência, soma, janela de datas) ficam na RPC —
+  // aqui é só shape básico, pra não duplicar regra de negócio em dois lugares.
+  tipo_pagamento: z.string().min(1),
+  numero_parcelas: z.number().int().positive().nullable(),
 });
 
 const pagamentoRowSchema = z.object({
   empresa: z.string().min(1),
+  nro_parcela: z.number().int().positive().nullable(),
   data_vencimento: z.string().min(1),
   valor: z.number().positive(),
   status: z.enum(STATUS_PAGAMENTO),
