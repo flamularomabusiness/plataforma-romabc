@@ -16,7 +16,7 @@ import { cadastroComEmail } from "@/lib/auth";
 
 // Sem campo de role de propósito — toda conta nova nasce "comercial" (ver
 // supabase/migration_auth_usuarios.sql). Deixar escolher a role aqui
-// permitiria qualquer um virar "gerente" sozinho.
+// permitiria qualquer um virar "administrator" sozinho.
 const signupSchema = z
   .object({
     email: z.string().min(1, "Email é obrigatório").email("Email inválido"),
@@ -124,7 +124,7 @@ export default function SignupPage() {
               />
 
               <p className="text-xs text-muted-foreground">
-                Toda conta nova começa com acesso Comercial. Um Gerente pode liberar mais acesso depois.
+                Toda conta nova começa com acesso Comercial. Um Administrador pode liberar mais acesso depois.
               </p>
 
               {erroGeral && <p className="text-sm font-medium text-destructive">{erroGeral}</p>}

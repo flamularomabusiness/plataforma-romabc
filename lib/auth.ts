@@ -11,21 +11,22 @@ import { supabase } from "./supabase";
  * usuarios), a leitura continua a mesma.
  */
 
-export const USER_ROLES = ["comercial", "gerente", "financeiro"] as const;
+export const USER_ROLES = ["comercial", "administrator", "financeiro"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   comercial: "Comercial",
-  gerente: "Gerente",
+  administrator: "Administrador",
   financeiro: "Financeiro",
 };
 
 /**
- * Permissões por funcionalidade em vez de uma hierarquia numérica: com 3
- * roles, comercial e financeiro têm acessos que não são um subconjunto um
- * do outro (comercial cria contrato mas não vê dashboard; financeiro vê
- * dashboard mas não cria contrato), então "gerente >= financeiro >= comercial"
- * não é uma modelagem válida. gerente é o único que acumula tudo.
+ * Permissões por funcionalidade em vez de uma hierarquia numérica: comercial
+ * tem um recorte próprio (só Clientes + Novo Contrato) que não é um
+ * subconjunto do resto. administrator e financeiro hoje têm exatamente as
+ * mesmas permissões de negócio — a única diferença entre os dois é
+ * gerenciarUsuarios, exclusiva de administrator (promover/rebaixar/desativar
+ * gente é um tipo de poder à parte, não "mais uma funcionalidade normal").
  */
 export type Funcionalidade =
   | "dashboard"
@@ -34,7 +35,8 @@ export type Funcionalidade =
   | "editarStatusCliente"
   | "editarStatusPagamento"
   | "importarDados"
-  | "adicionarPessoa";
+  | "adicionarPessoa"
+  | "gerenciarUsuarios";
 
 const PERMISSOES: Record<UserRole, Record<Funcionalidade, boolean>> = {
   comercial: {
@@ -45,8 +47,9 @@ const PERMISSOES: Record<UserRole, Record<Funcionalidade, boolean>> = {
     editarStatusPagamento: false,
     importarDados: false,
     adicionarPessoa: false,
+    gerenciarUsuarios: false,
   },
-  gerente: {
+  administrator: {
     dashboard: true,
     clientes: true,
     formulario: true,
@@ -54,15 +57,17 @@ const PERMISSOES: Record<UserRole, Record<Funcionalidade, boolean>> = {
     editarStatusPagamento: true,
     importarDados: true,
     adicionarPessoa: true,
+    gerenciarUsuarios: true,
   },
   financeiro: {
     dashboard: true,
     clientes: true,
-    formulario: false,
+    formulario: true,
     editarStatusCliente: true,
     editarStatusPagamento: true,
     importarDados: true,
     adicionarPessoa: true,
+    gerenciarUsuarios: false,
   },
 };
 
@@ -89,10 +94,14 @@ function normalizarRole(bruto: unknown): UserRole {
   return (USER_ROLES as readonly string[]).includes(valor) ? (valor as UserRole) : "comercial";
 }
 
-async function buscarRoleDoUsuario(userId: string): Promise<UserRole> {
-  const { data, error } = await supabase.from("usuarios").select("role").eq("id", userId).maybeSingle();
-  if (error || !data) return "comercial";
-  return normalizarRole(data.role);
+async function buscarLinhaUsuario(userId: string): Promise<{ role: UserRole; ativo: boolean } | null> {
+  const { data, error } = await supabase
+    .from("usuarios")
+    .select("role, ativo")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return { role: normalizarRole(data.role), ativo: data.ativo !== false };
 }
 
 function notificarAssinantes() {
@@ -111,8 +120,17 @@ function iniciarListenerAuth() {
       notificarAssinantes();
       return;
     }
-    buscarRoleDoUsuario(session.user.id).then((role) => {
-      cachedRole = role;
+    buscarLinhaUsuario(session.user.id).then((linha) => {
+      if (linha && !linha.ativo) {
+        // Conta desativada por um administrator — derruba a sessão local na
+        // hora, mesmo que a pessoa já estivesse logada e navegando. O
+        // signOut() dispara outro onAuthStateChange (SIGNED_OUT), que zera
+        // cachedRole/cachedUserId pelo branch acima; o middleware barra o
+        // próximo acesso a qualquer rota protegida de qualquer forma.
+        supabase.auth.signOut();
+        return;
+      }
+      cachedRole = linha?.role ?? "comercial";
       sessaoResolvida = true;
       notificarAssinantes();
     });
@@ -164,6 +182,32 @@ export function useUserRole(): UserRole {
   return role;
 }
 
+/**
+ * Pra páginas que fazem gate de acesso (redireciona se não tiver permissão):
+ * espera a sessão resolver antes de decidir. Um hasAccess(...) direto num
+ * useEffect on-mount checava a role síncrona ANTES da sessão real do
+ * Supabase carregar (ela começa em "comercial" até resolver) — um
+ * administrator/financeiro dando refresh numa página protegida podia ser
+ * expulso por engano, no instante entre montar e a sessão resolver.
+ */
+export function useAcessoLiberado(funcionalidade: Funcionalidade): "carregando" | "liberado" | "negado" {
+  const [pronto, setPronto] = useState(sessaoResolvida);
+  const role = useUserRole();
+
+  useEffect(() => {
+    iniciarListenerAuth();
+    const atualizar = () => setPronto(sessaoResolvida);
+    assinantes.add(atualizar);
+    atualizar();
+    return () => {
+      assinantes.delete(atualizar);
+    };
+  }, []);
+
+  if (!pronto) return "carregando";
+  return podeAcessar(role, funcionalidade) ? "liberado" : "negado";
+}
+
 // ---------------------------------------------------------------------------
 // Login / cadastro / logout (Supabase Auth real).
 // ---------------------------------------------------------------------------
@@ -190,8 +234,9 @@ export async function obterUsuarioAtual(): Promise<UsuarioAtual | null> {
     data: { session },
   } = await supabase.auth.getSession();
   if (!session?.user) return null;
-  const role = await buscarRoleDoUsuario(session.user.id);
-  return { id: session.user.id, email: session.user.email ?? "", role };
+  const linha = await buscarLinhaUsuario(session.user.id);
+  if (linha && !linha.ativo) return null;
+  return { id: session.user.id, email: session.user.email ?? "", role: linha?.role ?? "comercial" };
 }
 
 export async function loginComEmail(email: string, senha: string) {
@@ -205,7 +250,8 @@ export async function loginComEmail(email: string, senha: string) {
  * Toda conta nova sempre nasce 'comercial' (o trigger handle_new_user no
  * banco garante isso; ver supabase/migration_auth_usuarios.sql). Deixar a
  * pessoa escolher a própria role no cadastro permitiria qualquer um virar
- * "gerente" sozinho — promoção só acontece depois, por quem já é gerente.
+ * "administrator" sozinho — promoção só acontece depois, por quem já é
+ * administrator.
  */
 export async function cadastroComEmail(email: string, senha: string) {
   const { data, error } = await supabase.auth.signUp({ email, password: senha });
@@ -219,4 +265,44 @@ export async function logout() {
   cachedUserId = null;
   sessaoResolvida = true;
   notificarAssinantes();
+}
+
+// ---------------------------------------------------------------------------
+// Gestão de usuários (exclusiva de administrator — RLS em usuarios só deixa
+// ver/editar linha de outra pessoa quem já é administrator; estas funções
+// não reforçam isso de novo no client, só repassam pro Supabase e deixam a
+// RLS barrar quem tentar sem ser administrator).
+// ---------------------------------------------------------------------------
+
+export interface UsuarioGerenciado {
+  id: string;
+  email: string;
+  role: UserRole;
+  ativo: boolean;
+  nome: string | null;
+  data_criacao: string;
+}
+
+export async function listarUsuarios(): Promise<UsuarioGerenciado[]> {
+  const { data, error } = await supabase
+    .from("usuarios")
+    .select("id, email, role, ativo, nome, data_criacao")
+    .order("data_criacao", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((linha) => ({ ...linha, role: normalizarRole(linha.role) }));
+}
+
+export async function atualizarRoleUsuario(id: string, novaRole: UserRole) {
+  const { error } = await supabase.from("usuarios").update({ role: novaRole }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function desativarUsuario(id: string) {
+  const { error } = await supabase.from("usuarios").update({ ativo: false }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function reativarUsuario(id: string) {
+  const { error } = await supabase.from("usuarios").update({ ativo: true }).eq("id", id);
+  if (error) throw new Error(error.message);
 }

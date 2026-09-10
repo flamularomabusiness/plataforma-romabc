@@ -3,7 +3,18 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarRange, Home, LayoutDashboard, LogOut, Menu, Upload, User, Users, X } from "lucide-react";
+import {
+  CalendarRange,
+  Home,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  ShieldCheck,
+  Upload,
+  User,
+  Users,
+  X,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { logout, podeAcessar, ROLE_LABELS, useUserRole, type Funcionalidade } from "@/lib/auth";
@@ -28,6 +39,12 @@ const ITENS_MENU: Array<{
     label: "Importar Dados",
     icon: Upload,
     funcionalidade: "importarDados",
+  },
+  {
+    href: "/painel/admin/usuarios",
+    label: "Gerenciar Usuários",
+    icon: ShieldCheck,
+    funcionalidade: "gerenciarUsuarios",
   },
 ];
 

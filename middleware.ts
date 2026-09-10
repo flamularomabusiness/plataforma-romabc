@@ -49,6 +49,27 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Checagem de role/ativo aqui é reforço server-side além do listener em
+  // lib/auth.ts (que só reage quando o client já está rodando) — cobre
+  // também quem chega direto numa rota por link/refresh sem passar pelo
+  // listener ainda.
+  if (user && !rotaPublica) {
+    const { data: linha } = await supabase.from("usuarios").select("role, ativo").eq("id", user.id).maybeSingle();
+
+    if (linha && linha.ativo === false) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+
+    if (path.startsWith("/painel/admin") && linha?.role !== "administrator") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/painel/inicio";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return response;
 }
 

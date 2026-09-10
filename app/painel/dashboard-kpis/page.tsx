@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TabelaKpis } from "@/components/dashboard/tabela-kpis";
 import { TabelaMensalidadesCliente } from "@/components/dashboard/tabela-mensalidades-cliente";
 import { useDashboardKPIs, useMensalidadesPorCliente, useUNEs } from "@/lib/queries";
-import { hasAccess } from "@/lib/auth";
+import { useAcessoLiberado } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { TIPOS_PAGAMENTO, type TipoContratoFiltro } from "@/lib/types";
 
@@ -47,7 +47,7 @@ const TIPO_CONTRATO_MENSALIDADES_LABEL: Record<TipoContratoFiltro, string> = {
 
 export default function DashboardKPIsPage() {
   const router = useRouter();
-  const [acessoLiberado, setAcessoLiberado] = useState<boolean | null>(null);
+  const acesso = useAcessoLiberado("dashboard");
 
   const [periodo, setPeriodo] = useState("12");
   const [anoVigente, setAnoVigente] = useState(false);
@@ -66,13 +66,8 @@ export default function DashboardKPIsPage() {
   }, [buscaCliente]);
 
   useEffect(() => {
-    if (hasAccess("dashboard")) {
-      setAcessoLiberado(true);
-    } else {
-      setAcessoLiberado(false);
-      router.push("/painel/clientes");
-    }
-  }, [router]);
+    if (acesso === "negado") router.push("/painel/clientes");
+  }, [acesso, router]);
 
   const { data, isLoading, isFetching, isError, refetch } = useDashboardKPIs({
     quantidadeMeses: Number(periodo),
@@ -106,7 +101,7 @@ export default function DashboardKPIsPage() {
     }
   }, [unes, uneIdMensalidades]);
 
-  if (!acessoLiberado) {
+  if (acesso !== "liberado") {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />

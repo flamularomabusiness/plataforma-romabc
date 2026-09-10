@@ -29,7 +29,7 @@ function formatarErroZod(error: z.ZodError): string {
 // Duplicado de USER_ROLES (lib/auth.ts) de propósito: esse arquivo tem
 // useState/useEffect (é pensado pra rodar no client) e não pode ser
 // importado por uma API route server-side.
-const USER_ROLES = ["comercial", "gerente", "financeiro"] as const;
+const USER_ROLES = ["comercial", "administrator", "financeiro"] as const;
 
 const clienteRowSchema = z.object({
   empresa: z.string().min(1),
@@ -89,9 +89,9 @@ export async function POST(request: NextRequest) {
 
   const { usuarioRole, nomeArquivo, clientes, pagamentos } = parsed.data;
 
-  if (usuarioRole !== "gerente" && usuarioRole !== "financeiro") {
+  if (usuarioRole !== "administrator" && usuarioRole !== "financeiro") {
     return NextResponse.json(
-      { error: "Apenas Gerente e Financeiro podem importar dados" },
+      { error: "Apenas Administrador e Financeiro podem importar dados" },
       { status: 403 }
     );
   }

@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "./supabase";
 import { determinarStatusCliente, determinarStatusPagamento } from "./status-helper";
-import type { UserRole } from "./auth";
+import {
+  atualizarRoleUsuario,
+  desativarUsuario,
+  listarUsuarios,
+  reativarUsuario,
+  type UserRole,
+} from "./auth";
 import {
   Cliente,
   ClienteComResumo,
@@ -1458,5 +1464,37 @@ export function useMensalidadesPorCliente(uneId: string | null, tipoContrato: Ti
     queryFn: () => fetchMensalidadesPorCliente(uneId as string, tipoContrato, ano),
     enabled: !!uneId,
     staleTime: 60 * 60 * 1000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Gestão de usuários (tela /painel/admin/usuarios, só administrator).
+// ---------------------------------------------------------------------------
+
+export function useUsuarios() {
+  return useQuery({ queryKey: ["usuarios"], queryFn: listarUsuarios });
+}
+
+export function useAtualizarRoleUsuario() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, role }: { id: string; role: UserRole }) => atualizarRoleUsuario(id, role),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["usuarios"] }),
+  });
+}
+
+export function useDesativarUsuario() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => desativarUsuario(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["usuarios"] }),
+  });
+}
+
+export function useReativarUsuario() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => reativarUsuario(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["usuarios"] }),
   });
 }

@@ -95,7 +95,7 @@ export default function InicioPage() {
         )}
       </div>
 
-      {userRole === "gerente" &&
+      {userRole === "administrator" &&
         (loadingKpis ? (
           <div className="grid gap-4 sm:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -125,14 +125,7 @@ export default function InicioPage() {
       {userRole === "comercial" && (
         <div className="rounded-lg border-l-4 border-primary bg-muted p-4 text-sm">
           <strong>Dica:</strong> para acessar o Dashboard com análises completas, peça
-          acesso ao seu Gerente.
-        </div>
-      )}
-
-      {userRole === "financeiro" && (
-        <div className="rounded-lg border-l-4 border-warning bg-muted p-4 text-sm">
-          <strong>Acesso Financeiro:</strong> você pode visualizar pagamentos, mas não
-          pode criar novos contratos. Fale com o Gerente se precisar.
+          acesso a um Administrador.
         </div>
       )}
 

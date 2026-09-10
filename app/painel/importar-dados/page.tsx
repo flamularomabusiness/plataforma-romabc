@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { UploadArea } from "@/components/importar-dados/upload-area";
 import { PreviewTabela } from "@/components/importar-dados/preview-tabela";
 import { HistoricoImportacoes } from "@/components/importar-dados/historico-importacoes";
-import { hasAccess, useUserRole } from "@/lib/auth";
+import { useAcessoLiberado, useUserRole } from "@/lib/auth";
 import { useProdutos, useUNEs, useImportarDadosExcel } from "@/lib/queries";
 import { formatBRL, formatDate } from "@/lib/utils";
 import {
@@ -37,17 +37,12 @@ interface ResultadoImport {
 
 export default function ImportarDadosPage() {
   const router = useRouter();
-  const [acessoLiberado, setAcessoLiberado] = useState<boolean | null>(null);
+  const acesso = useAcessoLiberado("importarDados");
   const userRole = useUserRole();
 
   useEffect(() => {
-    if (hasAccess("importarDados")) {
-      setAcessoLiberado(true);
-    } else {
-      setAcessoLiberado(false);
-      router.push("/painel/clientes");
-    }
-  }, [router]);
+    if (acesso === "negado") router.push("/painel/clientes");
+  }, [acesso, router]);
 
   const [etapa, setEtapa] = useState<Etapa>("upload");
   const [carregandoArquivo, setCarregandoArquivo] = useState(false);
@@ -140,7 +135,7 @@ export default function ImportarDadosPage() {
     setResultado(null);
   }
 
-  if (!acessoLiberado) {
+  if (acesso !== "liberado") {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />

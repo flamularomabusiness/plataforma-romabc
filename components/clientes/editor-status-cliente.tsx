@@ -57,7 +57,7 @@ export function EditorStatusCliente({ cliente }: { cliente: ClienteDetalhes }) {
           <div className="flex items-center gap-3">
             <StatusBadge status={cliente.status} size="lg" />
             <p className="text-sm text-muted-foreground">
-              Apenas Gerente e Financeiro podem alterar o status.
+              Apenas Administrador e Financeiro podem alterar o status.
             </p>
           </div>
         ) : (

@@ -21,7 +21,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { useKPIs, usePagamentosDoMes, useReceitaMensal } from "@/lib/queries";
 import { formatBRL, formatDate, GRAU_DIFICULDADE_LABELS } from "@/lib/utils";
 import { GRAUS_DIFICULDADE } from "@/lib/types";
-import { hasAccess } from "@/lib/auth";
+import { useAcessoLiberado } from "@/lib/auth";
 
 // Recharts é uma dependência pesada (~100kb+ de JS); carregando sob demanda em
 // vez de no bundle estático, quem nunca abre o Dashboard nunca paga esse custo,
@@ -42,16 +42,11 @@ const GRAU_TEXT_CLASS: Record<(typeof GRAUS_DIFICULDADE)[number], string> = {
 export default function DashboardPage() {
   const router = useRouter();
   const [pagina, setPagina] = useState(1);
-  const [acessoLiberado, setAcessoLiberado] = useState<boolean | null>(null);
+  const acesso = useAcessoLiberado("dashboard");
 
   useEffect(() => {
-    if (hasAccess("dashboard")) {
-      setAcessoLiberado(true);
-    } else {
-      setAcessoLiberado(false);
-      router.push("/painel/clientes");
-    }
-  }, [router]);
+    if (acesso === "negado") router.push("/painel/clientes");
+  }, [acesso, router]);
 
   const { data: kpis, isLoading: loadingKpis } = useKPIs();
   const { data: pagamentos, isLoading: loadingPagamentos } = usePagamentosDoMes(
@@ -64,7 +59,7 @@ export default function DashboardPage() {
     ? Math.max(1, Math.ceil(pagamentos.total / PAGAMENTOS_POR_PAGINA))
     : 1;
 
-  if (!acessoLiberado) {
+  if (acesso !== "liberado") {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />
