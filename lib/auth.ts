@@ -100,7 +100,15 @@ async function buscarLinhaUsuario(userId: string): Promise<{ role: UserRole; ati
     .select("role, ativo")
     .eq("id", userId)
     .maybeSingle();
-  if (error || !data) return null;
+  if (error) {
+    console.error("[auth] erro ao buscar role em usuarios:", error.message, "| userId:", userId);
+    return null;
+  }
+  if (!data) {
+    console.warn("[auth] nenhuma linha em usuarios para este userId (caiu no fallback comercial):", userId);
+    return null;
+  }
+  console.log("[auth] role lida do banco:", data.role, "| ativo:", data.ativo, "| userId:", userId);
   return { role: normalizarRole(data.role), ativo: data.ativo !== false };
 }
 
@@ -112,7 +120,8 @@ function iniciarListenerAuth() {
   if (listenerIniciado || typeof window === "undefined") return;
   listenerIniciado = true;
 
-  supabase.auth.onAuthStateChange((_evento, session) => {
+  supabase.auth.onAuthStateChange((evento, session) => {
+    console.log("[auth] onAuthStateChange:", evento, "| userId:", session?.user?.id ?? null);
     cachedUserId = session?.user?.id ?? null;
     if (!session?.user) {
       cachedRole = "comercial";
@@ -132,6 +141,7 @@ function iniciarListenerAuth() {
       }
       cachedRole = linha?.role ?? "comercial";
       sessaoResolvida = true;
+      console.log("[auth] listener atualizou cachedRole para:", cachedRole, "(evento:", evento, ")");
       notificarAssinantes();
     });
   });
@@ -239,9 +249,41 @@ export async function obterUsuarioAtual(): Promise<UsuarioAtual | null> {
   return { id: session.user.id, email: session.user.email ?? "", role: linha?.role ?? "comercial" };
 }
 
+/**
+ * signInWithPassword() por si só resolve assim que o Supabase Auth autentica
+ * — a busca da role em "usuarios" só rodava depois, dentro do listener
+ * onAuthStateChange (lib/auth.ts, iniciarListenerAuth), em paralelo, sem
+ * ninguém esperar por ela. Isso é uma corrida real: a página de login
+ * chamava router.push("/painel/inicio") assim que loginComEmail() resolvia,
+ * e a página de destino podia montar e ler cachedRole ANTES do listener
+ * terminar de buscar a role de verdade — nesse instante cachedRole ainda
+ * podia estar em "comercial" (valor default, ou sobra do logout anterior),
+ * e como o timing depende da rede, o sintoma era "às vezes cai como
+ * comercial" (bug reportado). Corrigido buscando a role AQUI, antes de
+ * devolver — quando loginComEmail() resolve, cachedRole já está correto
+ * garantido. O listener ainda roda em paralelo e faz a mesma busca de novo
+ * (redundante, mas inofensivo — mesma resposta, só não é mais a única fonte).
+ */
 export async function loginComEmail(email: string, senha: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
   if (error) throw new Error(traduzirErroAuth(error.message));
+
+  if (data.user) {
+    console.log("[auth] login OK, buscando role antes de liberar navegação:", data.user.id);
+    const linha = await buscarLinhaUsuario(data.user.id);
+
+    if (linha && !linha.ativo) {
+      await supabase.auth.signOut();
+      throw new Error("Esta conta foi desativada. Fale com um Administrador.");
+    }
+
+    cachedUserId = data.user.id;
+    cachedRole = linha?.role ?? "comercial";
+    sessaoResolvida = true;
+    console.log("[auth] cachedRole definido para:", cachedRole);
+    notificarAssinantes();
+  }
+
   return data;
 }
 
