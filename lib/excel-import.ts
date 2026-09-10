@@ -93,9 +93,21 @@ function textoCelula(valor: unknown): string {
 // ---------------------------------------------------------------------------
 
 const DIACRITICOS_REGEX = new RegExp(String.fromCharCode(0x5b, 0x300, 0x2d, 0x36f, 0x5d), "g");
+// "º"/"ª" (indicador ordinal, U+00BA/U+00AA — usado em "Nº Parcela") e "°"
+// (grau, às vezes digitado por engano no lugar de "º") não são acentos —
+// não decompõem em base+combining sob NFD, então o strip de diacríticos
+// acima não pega. Sem isso, "Nº Parcela" nunca bate com nenhum nome de
+// coluna esperado e a importação falha com "colunas obrigatórias faltando".
+const ORDINAIS_REGEX = /[º°ª]/g;
 
 function normalizarHeader(h: string): string {
-  return h.normalize("NFD").replace(DIACRITICOS_REGEX, "").trim().toLowerCase();
+  return h
+    .normalize("NFD")
+    .replace(DIACRITICOS_REGEX, "")
+    .replace(ORDINAIS_REGEX, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function lerLinhasBrutas(sheet: ExcelJS.Worksheet): Record<string, unknown>[] {
@@ -162,13 +174,19 @@ const COLUNAS_CLIENTES_OBRIGATORIAS = [
   "cnpj",
   "une",
   "produto",
-  "valor",
+  "valor total",
   "status",
   "data inicio",
   "tipo pagamento",
-  "numero parcelas",
+  "n parcelas", // "Nº Parcelas" — normalizarHeader() remove o "º"
 ];
-const COLUNAS_PAGAMENTOS_OBRIGATORIAS = ["empresa", "nro parcela", "data vencimento", "valor", "status"];
+const COLUNAS_PAGAMENTOS_OBRIGATORIAS = [
+  "empresa",
+  "n parcela", // "Nº Parcela" — normalizarHeader() remove o "º"
+  "data vencimento",
+  "valor",
+  "status",
+];
 
 /**
  * "recorrente" / "à vista" (e variações: "a vista", "avista", "venda unica")
@@ -218,11 +236,11 @@ export function validarLinhasClientes(
     const une = textoCelula(linha["une"]);
     const produto = textoCelula(linha["produto"]);
     const statusBruto = textoCelula(linha["status"]).toUpperCase();
-    const valor = parseValorCelula(linha["valor"]);
+    const valor = parseValorCelula(linha["valor total"]);
     const dataInicio = formatarDataExcel(linha["data inicio"]);
     const tipoPagamentoBruto = textoCelula(linha["tipo pagamento"]);
     const tipoPagamento = normalizarTipoPagamento(tipoPagamentoBruto);
-    const numeroParcelasBruto = linha["numero parcelas"];
+    const numeroParcelasBruto = linha["n parcelas"];
     const numeroParcelas =
       typeof numeroParcelasBruto === "number"
         ? numeroParcelasBruto
@@ -302,7 +320,7 @@ export function validarLinhasPagamentos(
     const valor = parseValorCelula(linha["valor"]);
     const dataVencimento = formatarDataExcel(linha["data vencimento"]);
     const dataPagamento = formatarDataExcel(linha["data pagamento"]);
-    const nroParcelaBruto = linha["nro parcela"];
+    const nroParcelaBruto = linha["n parcela"];
     const nroParcela =
       typeof nroParcelaBruto === "number" ? nroParcelaBruto : Number(textoCelula(nroParcelaBruto));
     const nroParcelaValido = Number.isInteger(nroParcela) && nroParcela > 0;
