@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { KpiCard } from "@/components/kpi-card";
 import { useKPIs } from "@/lib/queries";
 import { formatBRL } from "@/lib/utils";
-import { clearUserRole, podeAcessar, ROLE_LABELS, useUserRole } from "@/lib/auth";
+import { logout, podeAcessar, ROLE_LABELS, useUserRole } from "@/lib/auth";
 
 function AcaoCard({
   icon: Icon,
@@ -47,8 +47,8 @@ export default function InicioPage() {
   const userRole = useUserRole();
   const { data: kpis, isLoading: loadingKpis } = useKPIs();
 
-  function trocarUsuario() {
-    clearUserRole();
+  async function sair() {
+    await logout();
     router.push("/login");
   }
 
@@ -137,8 +137,8 @@ export default function InicioPage() {
       )}
 
       <div className="text-center">
-        <Button variant="link" onClick={trocarUsuario}>
-          Trocar de usuário
+        <Button variant="link" onClick={sair}>
+          Sair
         </Button>
       </div>
     </div>

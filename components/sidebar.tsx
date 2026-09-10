@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { CalendarRange, Home, LayoutDashboard, Menu, Upload, User, Users, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { CalendarRange, Home, LayoutDashboard, LogOut, Menu, Upload, User, Users, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { podeAcessar, ROLE_LABELS, useUserRole, type Funcionalidade } from "@/lib/auth";
+import { logout, podeAcessar, ROLE_LABELS, useUserRole, type Funcionalidade } from "@/lib/auth";
 
 const ITENS_MENU: Array<{
   href: string;
@@ -33,11 +33,17 @@ const ITENS_MENU: Array<{
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [aberta, setAberta] = useState(false);
   const userRole = useUserRole();
   const itensVisiveis = ITENS_MENU.filter(
     (item) => !item.funcionalidade || podeAcessar(userRole, item.funcionalidade)
   );
+
+  async function sair() {
+    await logout();
+    router.push("/login");
+  }
 
   return (
     <>
@@ -91,9 +97,18 @@ export function Sidebar() {
             );
           })}
         </nav>
-        <div className="flex items-center gap-2 border-t p-4 text-sm text-muted-foreground">
-          <User className="h-4 w-4" />
-          Tipo: {ROLE_LABELS[userRole]}
+        <div className="border-t p-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <User className="h-4 w-4" />
+            Tipo: {ROLE_LABELS[userRole]}
+          </div>
+          <button
+            onClick={sair}
+            className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary"
+          >
+            <LogOut className="h-4 w-4" />
+            Sair
+          </button>
         </div>
       </aside>
     </>
