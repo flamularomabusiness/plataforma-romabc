@@ -38,7 +38,7 @@ import { maskCurrencyToNumber, formatCurrencyInput } from "@/lib/masks";
 
 type Contrato = ClienteDetalhes["contratos"][number];
 
-const STATUS_CONTRATO_EDITAVEL: StatusContrato[] = ["ativo", "cancelado"];
+const STATUS_CONTRATO_EDITAVEL: StatusContrato[] = ["ativo", "inativo", "cancelado"];
 
 const TIPO_PAGAMENTO_LABEL: Record<TipoPagamento, string> = {
   recorrente: "Recorrente",
@@ -77,12 +77,12 @@ export function TabelaContratosEditavel({
             valor_mensal: contrato.valor_mensal ?? undefined,
             data_vencimento_mensal: contrato.data_vencimento_mensal ?? undefined,
             grau_dificuldade: contrato.grau_dificuldade,
-            status: contrato.status === "inativo" ? "ativo" : contrato.status,
+            status: contrato.status,
           }
         : {
             valor_total: contrato.valor_total ?? undefined,
             grau_dificuldade: contrato.grau_dificuldade,
-            status: contrato.status === "inativo" ? "ativo" : contrato.status,
+            status: contrato.status,
           }
     );
   }
@@ -93,27 +93,37 @@ export function TabelaContratosEditavel({
   }
 
   async function salvar(contrato: Contrato) {
-    if (contrato.tipo_pagamento === "recorrente") {
-      if (!form.valor_mensal || form.valor_mensal <= 0) {
-        toast.error("Informe um valor mensal válido");
-        return;
-      }
-      if (
-        !form.data_vencimento_mensal ||
-        form.data_vencimento_mensal < 1 ||
-        form.data_vencimento_mensal > 31
-      ) {
-        toast.error("Dia de vencimento deve estar entre 1 e 31");
-        return;
-      }
-    } else if (!form.valor_total || form.valor_total <= 0) {
-      toast.error("Informe um valor total válido");
+    const recorrente = contrato.tipo_pagamento === "recorrente";
+    // undefined/NaN continua inválido, mas 0 agora é aceito de propósito —
+    // é como se encerra um contrato (zera o valor em vez de excluir o
+    // registro, mantendo o histórico de pagamentos já feitos).
+    const valor = recorrente ? form.valor_mensal : form.valor_total;
+    if (valor === undefined || Number.isNaN(valor) || valor < 0) {
+      toast.error(`Informe um valor ${recorrente ? "mensal" : "total"} válido`);
       return;
+    }
+    if (
+      recorrente &&
+      (!form.data_vencimento_mensal || form.data_vencimento_mensal < 1 || form.data_vencimento_mensal > 31)
+    ) {
+      toast.error("Dia de vencimento deve estar entre 1 e 31");
+      return;
+    }
+
+    let payload = form;
+    if (valor === 0 && form.status !== "inativo") {
+      const confirmarInativar = window.confirm(
+        "Zerar o valor costuma indicar que o contrato foi encerrado. Marcar este contrato como Inativo também?\n\n" +
+          "Os pagamentos já registrados (pagos/atrasados) continuam no histórico — só a projeção de receita futura deste contrato deixa de contar no Dashboard."
+      );
+      if (confirmarInativar) {
+        payload = { ...form, status: "inativo" };
+      }
     }
 
     const id = contrato.id;
     try {
-      await atualizar.mutateAsync({ id, payload: form });
+      await atualizar.mutateAsync({ id, payload });
       toast.success("Contrato atualizado com sucesso!");
       cancelarEdicao();
     } catch (error) {
@@ -156,7 +166,10 @@ export function TabelaContratosEditavel({
                     recorrente ? (
                       <Input
                         className="w-32"
-                        value={form.valor_mensal ? formatCurrencyInput(form.valor_mensal) : ""}
+                        // !== undefined (não truthiness): valor 0 é válido
+                        // agora (contrato encerrado) e "0" ?? false vira "" e
+                        // esconde o zero que a pessoa acabou de digitar.
+                        value={form.valor_mensal !== undefined ? formatCurrencyInput(form.valor_mensal) : ""}
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,
@@ -167,7 +180,7 @@ export function TabelaContratosEditavel({
                     ) : (
                       <Input
                         className="w-32"
-                        value={form.valor_total ? formatCurrencyInput(form.valor_total) : ""}
+                        value={form.valor_total !== undefined ? formatCurrencyInput(form.valor_total) : ""}
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,

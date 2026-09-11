@@ -288,11 +288,18 @@ async function fetchKPIsImpl(): Promise<KPIs> {
       .from("contratos")
       .select("id, cliente_id, grau_dificuldade", { count: "exact" })
       .eq("status", "ativo"),
+    // !inner + .eq("contrato.status", ...) filtra pelo status do CONTRATO
+    // dono do pagamento, não só do pagamento em si — sem isso, um contrato
+    // inativado/cancelado continuava inflando a receita projetada do mês
+    // porque suas parcelas PROJETADO ficavam intocadas na tabela (que é o
+    // comportamento certo: zerar valor_projetado destruiria o histórico do
+    // que foi projetado originalmente, útil pra analisar perda de receita).
     supabase
       .from("pagamentos_projetados")
-      .select("valor_projetado")
+      .select("valor_projetado, contrato:contratos!inner(status)")
       .eq("mes", mes)
-      .eq("ano", ano),
+      .eq("ano", ano)
+      .eq("contrato.status", "ativo"),
     supabase
       .from("pagamentos_projetados")
       .select("id", { count: "exact" })
@@ -966,6 +973,7 @@ export function useAtualizarContrato(clienteId: string) {
       queryClient.invalidateQueries({ queryKey: ["cliente", clienteId] });
       queryClient.invalidateQueries({ queryKey: ["clientes"] });
       queryClient.invalidateQueries({ queryKey: ["kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-kpis"] });
     },
   });
 }
@@ -1106,7 +1114,9 @@ async function fetchDashboardKPIsImpl(filtros: DashboardKPIsFiltros): Promise<Da
 
   let query = supabase
     .from("pagamentos_projetados")
-    .select("mes, ano, valor_projetado, status, contrato_id, contrato:contratos(une_id, tipo_pagamento)");
+    .select(
+      "mes, ano, valor_projetado, status, contrato_id, contrato:contratos(une_id, tipo_pagamento, status)"
+    );
 
   query = filtros.anoVigente
     ? query.eq("ano", inicio.ano)
@@ -1150,6 +1160,18 @@ async function fetchDashboardKPIsImpl(filtros: DashboardKPIsFiltros): Promise<Da
   }
 
   const chave = (m: { mes: number; ano: number }) => `${m.ano}-${m.mes}`;
+
+  // Contrato inativo/cancelado some da projeção de meses futuros (é o que a
+  // palavra "projetado" quer dizer — não faz sentido projetar receita de um
+  // contrato que já não está mais ativo), mas o histórico de meses já
+  // ocorridos fica intacto: apagar retroativamente o faturamento passado só
+  // porque o contrato foi encerrado depois distorceria o relatório
+  // histórico e a análise de quanto a empresa já faturou de verdade.
+  const mesesFuturos = new Set(meses.filter((m) => m.futuro).map((m) => chave(m)));
+  pagamentosValidos = pagamentosValidos.filter((p) => {
+    const futuro = mesesFuturos.has(chave({ mes: p.mes, ano: p.ano }));
+    return !futuro || p.contrato?.status === "ativo";
+  });
 
   const faturamentoConsolidado = new Map<string, number>();
   const clientesConsolidado = new Map<string, Set<string>>();
