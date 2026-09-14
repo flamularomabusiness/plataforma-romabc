@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, Lock, Pencil, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,50 @@ import { formatBRL, formatDate } from "@/lib/utils";
 import type { PagamentoProjetado } from "@/lib/types";
 import { maskCurrencyToNumber, formatCurrencyInput } from "@/lib/masks";
 
+/** Hoje em "YYYY-MM-DD" — comparável por ordem lexicográfica com data_vencimento. */
+function hojeISO(): string {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(
+    hoje.getDate()
+  ).padStart(2, "0")}`;
+}
+
+const TOLERANCIA_JANELA_DIAS = 45;
+
+/**
+ * "Dentro da janela do contrato" seria o ideal, mas contratos vêm de mais de
+ * um fluxo de criação (import Excel, formulário Novo Contrato, cada um
+ * preenchendo campos diferentes — parcelado por import não tem
+ * data_inicio_primeiro_pagamento, por exemplo) — calcular a janela "de
+ * verdade" a partir de metadados do contrato seria frágil e podia bloquear
+ * edições válidas em contratos mais antigos. Em vez disso, usa a própria
+ * janela observada nos OUTROS pagamentos deste mesmo contrato (min/max das
+ * datas já cadastradas) com uma folga de 45 dias pra cada lado — pega o
+ * mesmo tipo de erro grosseiro (mover um pagamento pra 2 anos no futuro) sem
+ * depender de dado que pode não existir.
+ */
+function calcularJanela(
+  pagamentos: PagamentoProjetado[],
+  contratoId: string,
+  excluirId: string
+): { min: string; max: string } | null {
+  const datas = pagamentos
+    .filter((p) => p.contrato_id === contratoId && p.id !== excluirId && p.data_vencimento)
+    .map((p) => p.data_vencimento as string)
+    .sort();
+  if (datas.length === 0) return null;
+
+  const folga = (iso: string, dias: number) => {
+    const d = new Date(iso + "T00:00:00");
+    d.setDate(d.getDate() + dias);
+    return d.toISOString().slice(0, 10);
+  };
+  return {
+    min: folga(datas[0], -TOLERANCIA_JANELA_DIAS),
+    max: folga(datas[datas.length - 1], TOLERANCIA_JANELA_DIAS),
+  };
+}
+
 export function TabelaPagamentosEditavel({
   pagamentos,
   clienteId,
@@ -38,7 +82,10 @@ export function TabelaPagamentosEditavel({
 
   function iniciarEdicao(pagamento: PagamentoProjetado) {
     setEditId(pagamento.id);
-    setForm({ valor_projetado: pagamento.valor_projetado });
+    setForm({
+      valor_projetado: pagamento.valor_projetado,
+      data_vencimento: pagamento.data_vencimento ?? undefined,
+    });
   }
 
   function cancelarEdicao() {
@@ -46,14 +93,43 @@ export function TabelaPagamentosEditavel({
     setForm({});
   }
 
-  async function salvar(id: string) {
+  async function salvar(pagamento: PagamentoProjetado) {
     if (!form.valor_projetado || form.valor_projetado <= 0) {
       toast.error("Informe um valor válido");
       return;
     }
 
+    const editandoData = pagamento.status === "PROJETADO";
+    const novaData = form.data_vencimento;
+    const dataMudou = editandoData && novaData && novaData !== pagamento.data_vencimento;
+
+    if (dataMudou) {
+      if (novaData < hojeISO()) {
+        toast.error("Data de Vencimento não pode ser no passado");
+        return;
+      }
+      const janela = calcularJanela(pagamentos, pagamento.contrato_id, pagamento.id);
+      if (janela && (novaData < janela.min || novaData > janela.max)) {
+        toast.error(
+          `Data fora da janela deste contrato (esperado entre ${formatDate(janela.min)} e ${formatDate(janela.max)})`
+        );
+        return;
+      }
+      const confirmou = window.confirm(
+        `Deseja alterar o vencimento de ${formatBRL(form.valor_projetado)} de ${formatDate(
+          pagamento.data_vencimento
+        )} para ${formatDate(novaData)}?`
+      );
+      if (!confirmou) return;
+    }
+
+    const payload: AtualizarPagamentoPayload = {
+      valor_projetado: form.valor_projetado,
+      ...(dataMudou ? { data_vencimento: novaData } : {}),
+    };
+
     try {
-      await atualizar.mutateAsync({ id, payload: form });
+      await atualizar.mutateAsync({ id: pagamento.id, payload });
       toast.success("Pagamento atualizado com sucesso!");
       cancelarEdicao();
     } catch (error) {
@@ -84,6 +160,7 @@ export function TabelaPagamentosEditavel({
         ) : (
           pagamentos.map((pagamento) => {
             const emEdicao = editId === pagamento.id;
+            const editavel = pagamento.status === "PROJETADO";
             return (
               <TableRow key={pagamento.id}>
                 <TableCell>
@@ -114,7 +191,26 @@ export function TabelaPagamentosEditavel({
                   )}
                 </TableCell>
 
-                <TableCell>{formatDate(pagamento.data_vencimento)}</TableCell>
+                <TableCell>
+                  {emEdicao && editavel ? (
+                    <Input
+                      type="date"
+                      className="w-36"
+                      value={form.data_vencimento ?? ""}
+                      onChange={(e) => setForm((f) => ({ ...f, data_vencimento: e.target.value }))}
+                    />
+                  ) : emEdicao ? (
+                    <span
+                      className="inline-flex items-center gap-1.5 text-muted-foreground"
+                      title="Não é possível alterar pagamentos já registrados (pago/atrasado)"
+                    >
+                      <Lock className="h-3.5 w-3.5" />
+                      {formatDate(pagamento.data_vencimento)}
+                    </span>
+                  ) : (
+                    formatDate(pagamento.data_vencimento)
+                  )}
+                </TableCell>
 
                 <TableCell>
                   {podeEditarStatus ? (
@@ -137,7 +233,7 @@ export function TabelaPagamentosEditavel({
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={() => salvar(pagamento.id)}
+                        onClick={() => salvar(pagamento)}
                         disabled={atualizar.isPending}
                         aria-label="Salvar"
                       >

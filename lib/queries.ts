@@ -588,13 +588,26 @@ export interface AtualizarPagamentoPayload {
   valor_projetado?: number;
   status?: StatusPagamento;
   data_pagamento_real?: string | null;
+  data_vencimento?: string;
 }
 
 export async function atualizarPagamento(id: string, payload: AtualizarPagamentoPayload) {
-  const { error } = await supabase
+  let query = supabase
     .from("pagamentos_projetados")
     .update({ ...payload, data_atualizacao: new Date().toISOString() })
     .eq("id", id);
+
+  // Reforço no próprio update (além do gate na UI, que só deixa abrir a
+  // edição de data pra linha PROJETADO): se por algum motivo o status já
+  // tiver mudado entre a tela carregar e o usuário salvar (ex.: outra aba
+  // marcou como PAGO nesse meio tempo), o update de data_vencimento não
+  // acha a linha (ela não é mais PROJETADO) e não faz nada, em vez de
+  // sobrescrever a data de um pagamento que virou histórico.
+  if (payload.data_vencimento !== undefined) {
+    query = query.eq("status", "PROJETADO");
+  }
+
+  const { error } = await query;
   if (error) throw new Error(error.message);
 }
 
@@ -986,6 +999,7 @@ export function useAtualizarPagamento(clienteId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cliente", clienteId] });
       queryClient.invalidateQueries({ queryKey: ["kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-kpis"] });
       queryClient.invalidateQueries({ queryKey: ["pagamentos-do-mes"] });
       queryClient.invalidateQueries({ queryKey: ["receita-mensal"] });
     },
