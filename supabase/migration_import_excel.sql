@@ -37,21 +37,25 @@
 -- coluna nro_parcela) é a fonte direta dos pagamentos pra QUALQUER tipo — a
 -- RPC não gera mais nada sozinha, só valida que o conjunto de linhas de
 -- PAGAMENTOS daquela empresa é coerente com o tipo antes de inserir:
---   • recorrente: exatamente 12 linhas, nro_parcela 1..12 sem furos nem
---     repetição, cada Data Vencimento entre Data Início e Data Início + 12
---     meses.
+--   • recorrente: pelo menos 1 linha (o N é a própria contagem — não precisa
+--     mais ser exatamente 12, um contrato que encerrou com 8 ou se estendeu
+--     pra 24 é válido), nro_parcela 1..N sem furos nem repetição, cada Data
+--     Vencimento entre Data Início e Data Início + N meses.
 --   • à vista (aceita "à vista"/"a vista"/"avista"/"venda unica" na sheet —
 --     internamente vira 'venda_unica', o mesmo valor usado no formulário de
 --     Novo Contrato): exatamente 1 linha, nro_parcela = 1, Data Vencimento a
 --     no máximo 5 dias de Data Início (pra qualquer lado).
---   • parcelado: exatamente numero_parcelas linhas (vindo de CLIENTES),
+--   • parcelado: pelo menos 1 linha — não precisa mais bater com Número de
+--     Parcelas declarado em CLIENTES (esse campo continua obrigatório na
+--     sheet como sanity check, mas só a contagem REAL das linhas de
+--     PAGAMENTOS manda: é o que fica gravado em contratos.numero_parcelas).
 --     nro_parcela 1..N sem furos nem repetição, datas em ordem estritamente
 --     crescente, cada Data Vencimento dentro de Data Início ± N meses, e a
 --     soma dos valores das parcelas batendo com o Valor do cliente (tolerância
 --     de 1 centavo, pra erro de arredondamento).
 -- Qualquer falha nessas checagens vira um raise exception com o nome da
--- empresa e o motivo específico (contagem errada, parcela faltando, data fora
--- da janela, soma não batendo) — nunca um erro genérico.
+-- empresa e o motivo específico (parcela faltando, data fora da janela, soma
+-- não batendo) — nunca um erro genérico.
 --
 -- Execute no SQL Editor do Supabase. Idempotente.
 
@@ -196,25 +200,30 @@ begin
     -- Validação específica por tipo de pagamento.
     -- =====================================================================
     if v_tipo_pagamento = 'recorrente' then
-      if v_qtd != 12 then
-        raise exception 'Empresa %: tipo recorrente precisa de 12 parcelas, encontrado %', v_nome_empresa, v_qtd;
+      -- Antes exigia exatamente 12 — rígido demais pra contrato que encerrou
+      -- antes (ex.: 8 meses) ou se estendeu além de 12. Só exige pelo menos
+      -- 1; a sequência 1..N e a janela de datas abaixo se ajustam ao N real
+      -- (quantidade de linhas que a empresa efetivamente trouxe), não a um
+      -- 12 fixo.
+      if v_qtd < 1 then
+        raise exception 'Empresa %: tipo recorrente precisa de pelo menos 1 parcela', v_nome_empresa;
       end if;
 
-      select array_agg(gs) into v_esperado from generate_series(1, 12) gs;
+      select array_agg(gs) into v_esperado from generate_series(1, v_qtd) gs;
       select array_agg(distinct (p->>'nro_parcela')::int order by (p->>'nro_parcela')::int)
       into v_encontrados
       from unnest(v_pags_arr) p;
 
       if v_encontrados is distinct from v_esperado then
         select array_agg(gs) into v_faltando
-        from generate_series(1, 12) gs
+        from generate_series(1, v_qtd) gs
         where gs != all(coalesce(v_encontrados, array[]::int[]));
-        raise exception 'Empresa %: Nº Parcela inválido (esperado 1-12, faltando %)',
-          v_nome_empresa, array_to_string(v_faltando, ', ');
+        raise exception 'Empresa %: Nº Parcela inválido (esperado 1-%, faltando %)',
+          v_nome_empresa, v_qtd, array_to_string(v_faltando, ', ');
       end if;
 
       v_janela_ini := v_data_inicio;
-      v_janela_fim := v_data_inicio + interval '12 months';
+      v_janela_fim := v_data_inicio + (v_qtd || ' months')::interval;
 
       for i in 1..v_qtd loop
         v_pag := v_pags_arr[i];
@@ -253,26 +262,31 @@ begin
       end if;
 
     elsif v_tipo_pagamento = 'parcelado' then
-      if v_qtd != v_numero_parcelas then
-        raise exception 'Empresa %: parcelado precisa de % parcelas, encontrado %',
-          v_nome_empresa, v_numero_parcelas, v_qtd;
+      -- Antes exigia bater exatamente com Número de Parcelas (CLIENTES) —
+      -- rígido demais quando o real diverge do planejado (14 em vez de 12,
+      -- por exemplo). Só exige pelo menos 1; sequência e janela usam o N
+      -- real (v_qtd), não o valor declarado em CLIENTES — Número de Parcelas
+      -- continua obrigatório na sheet (sanity check de que é um número
+      -- válido), mas deixa de precisar bater com a contagem real.
+      if v_qtd < 1 then
+        raise exception 'Empresa %: tipo parcelado precisa de pelo menos 1 parcela', v_nome_empresa;
       end if;
 
-      select array_agg(gs) into v_esperado from generate_series(1, v_numero_parcelas) gs;
+      select array_agg(gs) into v_esperado from generate_series(1, v_qtd) gs;
       select array_agg(distinct (p->>'nro_parcela')::int order by (p->>'nro_parcela')::int)
       into v_encontrados
       from unnest(v_pags_arr) p;
 
       if v_encontrados is distinct from v_esperado then
         select array_agg(gs) into v_faltando
-        from generate_series(1, v_numero_parcelas) gs
+        from generate_series(1, v_qtd) gs
         where gs != all(coalesce(v_encontrados, array[]::int[]));
         raise exception 'Empresa %: Nº Parcela inválido (esperado 1-%, faltando %)',
-          v_nome_empresa, v_numero_parcelas, array_to_string(v_faltando, ', ');
+          v_nome_empresa, v_qtd, array_to_string(v_faltando, ', ');
       end if;
 
-      v_janela_ini := v_data_inicio - (v_numero_parcelas || ' months')::interval;
-      v_janela_fim := v_data_inicio + (v_numero_parcelas || ' months')::interval;
+      v_janela_ini := v_data_inicio - (v_qtd || ' months')::interval;
+      v_janela_fim := v_data_inicio + (v_qtd || ' months')::interval;
       v_data_anterior := null;
       v_soma := 0;
 
@@ -338,7 +352,11 @@ begin
       v_data_inicio,
       case when v_tipo_pagamento = 'recorrente' then v_dia_vencimento else null end,
       v_valor_cliente,
-      case when v_tipo_pagamento = 'parcelado' then v_numero_parcelas else null end
+      -- v_qtd (contagem real de linhas), não v_numero_parcelas (o valor
+      -- declarado em CLIENTES) — agora que a contagem real não precisa mais
+      -- bater com o declarado, gravar o declarado deixaria o contrato
+      -- mostrando "parcela X de 12" em algum lugar mesmo tendo só 8 linhas.
+      case when v_tipo_pagamento = 'parcelado' then v_qtd else null end
     )
     returning id into v_contrato_id;
 
