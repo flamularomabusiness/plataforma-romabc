@@ -101,6 +101,9 @@ export interface Cliente {
   data_criacao: string;
   data_atualizacao: string;
   data_inativacao: string | null;
+  deletado: boolean;
+  deletado_em: string | null;
+  deletado_por: string | null;
 }
 
 export interface ContatoCliente {
@@ -257,6 +260,8 @@ export interface ClienteComResumo {
   status: StatusCliente;
   /** Grau de dificuldade do contrato mais recente do cliente (null se não houver contratos). */
   grau_dificuldade: GrauDificuldade | null;
+  deletado: boolean;
+  deletado_em: string | null;
 }
 
 export interface ClienteDetalhes extends Cliente {
@@ -454,6 +459,8 @@ export interface ClienteFiltros {
   status?: StatusCliente | "TODOS";
   pagina?: number;
   porPagina?: number;
+  /** Só administrator usa isto — lista os soft-deletados em vez dos ativos. */
+  mostrarDeletados?: boolean;
 }
 
 /** Retorno da função RPC criar_contrato_completo (ver supabase/migration_schema_real_alinhamento.sql). */

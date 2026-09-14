@@ -36,7 +36,8 @@ export type Funcionalidade =
   | "editarStatusPagamento"
   | "importarDados"
   | "adicionarPessoa"
-  | "gerenciarUsuarios";
+  | "gerenciarUsuarios"
+  | "deletarCliente";
 
 const PERMISSOES: Record<UserRole, Record<Funcionalidade, boolean>> = {
   comercial: {
@@ -48,6 +49,11 @@ const PERMISSOES: Record<UserRole, Record<Funcionalidade, boolean>> = {
     importarDados: false,
     adicionarPessoa: false,
     gerenciarUsuarios: false,
+    // Comercial não edita nem status de cliente hoje — dar poder de ocultar
+    // QUALQUER cliente do sistema (não existe conceito de "dono") seria uma
+    // permissão nova mais sensível que tudo que ele já tem. Decisão
+    // confirmada com o usuário ao construir esta feature.
+    deletarCliente: false,
   },
   administrator: {
     dashboard: true,
@@ -58,6 +64,7 @@ const PERMISSOES: Record<UserRole, Record<Funcionalidade, boolean>> = {
     importarDados: true,
     adicionarPessoa: true,
     gerenciarUsuarios: true,
+    deletarCliente: true,
   },
   financeiro: {
     dashboard: true,
@@ -68,6 +75,10 @@ const PERMISSOES: Record<UserRole, Record<Funcionalidade, boolean>> = {
     importarDados: true,
     adicionarPessoa: true,
     gerenciarUsuarios: false,
+    // Só soft delete — hard delete é exclusivo de administrator, checado
+    // direto pela role (não por uma Funcionalidade separada) nos pontos que
+    // chamam deletar_cliente_hard.
+    deletarCliente: true,
   },
 };
 

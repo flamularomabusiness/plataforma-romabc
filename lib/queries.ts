@@ -122,7 +122,7 @@ export async function fetchClientes(
 async function fetchClientesImpl(
   filters: ClienteFiltros
 ): Promise<{ data: ClienteComResumo[]; total: number }> {
-  const { busca, status = "TODOS", pagina = 1, porPagina = 50 } = filters;
+  const { busca, status = "TODOS", pagina = 1, porPagina = 50, mostrarDeletados = false } = filters;
 
   // contratos(...) embutido usa a FK direta contratos.cliente_id, que só
   // aponta pra "primeira" empresa de um contrato agora que uma empresa pode
@@ -137,6 +137,8 @@ async function fetchClientesImpl(
          grau_dificuldade, data_criacao, pessoas_cliente(email, eh_principal)))`,
       { count: "exact" }
     );
+
+  query = query.eq("deletado", mostrarDeletados);
 
   if (busca) {
     query = query.or(`nome_razao_social.ilike.%${busca}%,cpf_cnpj_responsavel.ilike.%${busca}%`);
@@ -192,6 +194,8 @@ async function fetchClientesImpl(
       ),
       status: row.status as StatusCliente,
       grau_dificuldade: (contratoMaisRecente?.grau_dificuldade as GrauDificuldade) ?? null,
+      deletado: row.deletado ?? false,
+      deletado_em: row.deletado_em ?? null,
     };
   });
 
@@ -566,6 +570,74 @@ export async function atualizarStatusAutomaticoClientes(): Promise<{ atualizados
     }
   }
   return { atualizados };
+}
+
+// ---------------------------------------------------------------------------
+// Deletar cliente — soft (administrator/financeiro) e hard (administrator,
+// só quando o cliente não tem histórico financeiro real nem contrato
+// compartilhado com outra empresa; ver supabase/migration_delete_clientes.sql
+// pra checagem completa). Sempre via RPC, nunca .delete()/.update() direto
+// nessas tabelas do client: são as únicas 3 funções deste arquivo que
+// checam a role no BANCO antes de agir, já que clientes/contratos não têm
+// RLS habilitada neste projeto (decisão de uma fase anterior) — sem essa
+// checagem no lado do banco, qualquer código com a anon key poderia deletar
+// clientes direto, ignorando o botão/role da UI.
+// ---------------------------------------------------------------------------
+
+export async function deletarClienteSoft(clienteId: string, motivo?: string) {
+  const { error } = await supabase.rpc("deletar_cliente_soft", {
+    p_cliente_id: clienteId,
+    p_motivo: motivo ?? null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function deletarClienteHard(clienteId: string, motivo?: string) {
+  const { error } = await supabase.rpc("deletar_cliente_hard", {
+    p_cliente_id: clienteId,
+    p_motivo: motivo ?? null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function restaurarCliente(clienteId: string) {
+  const { error } = await supabase.rpc("restaurar_cliente", { p_cliente_id: clienteId });
+  if (error) throw new Error(error.message);
+}
+
+function useInvalidarClientesAposDelete() {
+  const queryClient = useQueryClient();
+  return () => {
+    queryClient.invalidateQueries({ queryKey: ["clientes"] });
+    queryClient.invalidateQueries({ queryKey: ["kpis"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-kpis"] });
+  };
+}
+
+export function useDeletarClienteSoft() {
+  const invalidar = useInvalidarClientesAposDelete();
+  return useMutation({
+    mutationFn: ({ clienteId, motivo }: { clienteId: string; motivo?: string }) =>
+      deletarClienteSoft(clienteId, motivo),
+    onSuccess: invalidar,
+  });
+}
+
+export function useDeletarClienteHard() {
+  const invalidar = useInvalidarClientesAposDelete();
+  return useMutation({
+    mutationFn: ({ clienteId, motivo }: { clienteId: string; motivo?: string }) =>
+      deletarClienteHard(clienteId, motivo),
+    onSuccess: invalidar,
+  });
+}
+
+export function useRestaurarCliente() {
+  const invalidar = useInvalidarClientesAposDelete();
+  return useMutation({
+    mutationFn: (clienteId: string) => restaurarCliente(clienteId),
+    onSuccess: invalidar,
+  });
 }
 
 export interface AtualizarContratoPayload {
