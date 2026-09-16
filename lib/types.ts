@@ -80,6 +80,8 @@ export interface Consultora {
   email: string | null;
   telefone: string | null;
   setor: string | null;
+  /** Exibido no formulário como "Nome (especialidade)" — ex.: "consultoria", "CFO". */
+  especialidade: string | null;
   ativo: boolean;
   data_criacao: string;
   data_atualizacao: string;
@@ -145,6 +147,13 @@ export interface ContratoEmpresa {
   id: string;
   contrato_id: string;
   cliente_id: string;
+  /** No máximo 1 true por contrato — empresa usada pro faturamento/destaque no painel. Trocável depois. */
+  eh_principal: boolean;
+}
+
+/** Uma empresa vinculada a um contrato, junto da flag de principal (contrato_empresas.eh_principal). */
+export interface EmpresaDoContrato extends Cliente {
+  eh_principal: boolean;
 }
 
 export interface Contrato {
@@ -165,6 +174,8 @@ export interface Contrato {
   valor_entrada: number | null;
   data_entrada: string | null;
   numero_parcelas: number | null;
+  /** Quantas empresas o grupo TEM (digitado à parte no formulário) — não precisa bater com a contagem real de contrato_empresas. */
+  numero_empresas: number;
   data_inicio_consultoria: string | null;
   data_onboarding: string | null;
   data_cancelamento: string | null;
@@ -206,6 +217,8 @@ export interface NovoContratoPayload {
     estado: string | null;
     faturamento_medio: number | null;
   }>;
+  /** Quantas empresas o grupo tem — a 1ª de "empresas" sempre vira a principal. */
+  numero_empresas: number;
   pessoas: Array<{
     cpf: string;
     nome_completo: string;
@@ -239,9 +252,9 @@ export interface NovoContratoPayload {
     data_onboarding?: string | null;
   };
   consultora_id: string;
-  contexto_perfil_cliente: string;
+  contexto_perfil_cliente?: string | null;
   observacoes?: string | null;
-  grau_dificuldade: GrauDificuldade;
+  grau_dificuldade?: GrauDificuldade;
 }
 
 export interface ClienteComResumo {
@@ -274,7 +287,7 @@ export interface ClienteDetalhes extends Cliente {
       une: Une | null;
       pessoas: PessoaCliente[];
       /** Todas as empresas ligadas a este contrato via contrato_empresas (inclui a própria, se ligada). */
-      empresas: Cliente[];
+      empresas: EmpresaDoContrato[];
     }
   >;
   pagamentos_projetados: PagamentoProjetado[];

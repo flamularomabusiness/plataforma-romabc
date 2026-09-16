@@ -78,11 +78,13 @@ export function TabelaContratosEditavel({
             data_vencimento_mensal: contrato.data_vencimento_mensal ?? undefined,
             grau_dificuldade: contrato.grau_dificuldade,
             status: contrato.status,
+            numero_empresas: contrato.numero_empresas,
           }
         : {
             valor_total: contrato.valor_total ?? undefined,
             grau_dificuldade: contrato.grau_dificuldade,
             status: contrato.status,
+            numero_empresas: contrato.numero_empresas,
           }
     );
   }
@@ -107,6 +109,10 @@ export function TabelaContratosEditavel({
       (!form.data_vencimento_mensal || form.data_vencimento_mensal < 1 || form.data_vencimento_mensal > 31)
     ) {
       toast.error("Dia de vencimento deve estar entre 1 e 31");
+      return;
+    }
+    if (!form.numero_empresas || form.numero_empresas < 1) {
+      toast.error("Número de empresas deve ser pelo menos 1");
       return;
     }
 
@@ -141,13 +147,14 @@ export function TabelaContratosEditavel({
           <TableHead>Dia Vencimento</TableHead>
           <TableHead>Grau de Dificuldade</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead>Nº Empresas</TableHead>
           <TableHead className="text-right">Ação</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {contratos.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center text-muted-foreground">
+            <TableCell colSpan={8} className="text-center text-muted-foreground">
               Nenhum contrato cadastrado.
             </TableCell>
           </TableRow>
@@ -265,6 +272,22 @@ export function TabelaContratosEditavel({
                     <Badge variant={STATUS_CONTRATO_VARIANT[contrato.status]}>
                       {STATUS_CONTRATO_LABEL[contrato.status]}
                     </Badge>
+                  )}
+                </TableCell>
+
+                <TableCell>
+                  {emEdicao ? (
+                    <Input
+                      type="number"
+                      min={1}
+                      className="w-20"
+                      value={form.numero_empresas ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, numero_empresas: Number(e.target.value) }))
+                      }
+                    />
+                  ) : (
+                    contrato.numero_empresas
                   )}
                 </TableCell>
 

@@ -9,7 +9,7 @@ export const empresaSchema = z.object({
     .regex(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/, "CNPJ inválido"),
   cidade: z.string().min(1, "Cidade é obrigatória"),
   estado: z.enum(ESTADOS_BR, { errorMap: () => ({ message: "Selecione o estado" }) }),
-  faturamento_medio: z.number().nonnegative("Informe um valor válido"),
+  faturamento_medio: z.number().nonnegative("Informe um valor válido").optional(),
 });
 
 export const parcelaSchema = z.object({
@@ -23,7 +23,7 @@ export const pessoaSchema = z.object({
     .min(1, "CPF é obrigatório")
     .regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, "CPF inválido"),
   nome_completo: z.string().min(1, "Nome completo é obrigatório"),
-  faturamento_medio: z.number().nonnegative("Informe um valor válido"),
+  faturamento_medio: z.number().nonnegative("Informe um valor válido").optional(),
   telefone: z
     .string()
     .min(1, "Telefone é obrigatório")
@@ -44,6 +44,10 @@ export const formularioContratoSchema = z
     une_id: z.string().min(1, "UNE deve ser preenchida automaticamente"),
 
     // Empresa Cliente
+    numero_empresas: z
+      .number({ invalid_type_error: "Informe quantas empresas o grupo tem" })
+      .int()
+      .min(1, "Mínimo 1"),
     empresas: z
       .array(empresaSchema)
       .min(1, "Adicione ao menos 1 empresa"),
@@ -92,9 +96,7 @@ export const formularioContratoSchema = z
     grau_dificuldade: z
       .enum(GRAUS_DIFICULDADE, { errorMap: () => ({ message: "Selecione o grau de dificuldade" }) })
       .default("MEDIO"),
-    contexto_perfil_cliente: z
-      .string()
-      .min(1, "Descreva o contexto e perfil do cliente"),
+    contexto_perfil_cliente: z.string().optional().or(z.literal("")),
     observacoes: z.string().optional().or(z.literal("")),
   })
   .superRefine((data, ctx) => {
@@ -231,6 +233,7 @@ export const pessoaVazia = {
 export const valoresPadrao: FormularioContratoValues = {
   produto_id: "",
   une_id: "",
+  numero_empresas: 1,
   empresas: [empresaVazia],
   pessoas: [{ ...pessoaVazia, eh_principal: true }],
   tipo_pagamento: "recorrente",

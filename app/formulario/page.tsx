@@ -29,7 +29,7 @@ import { SecaoConsultora } from "@/components/formulario/secao-consultora";
 
 const SECOES_FINAIS = [
   { titulo: "Pagamento", Componente: SecaoPagamento },
-  { titulo: "Consultora, Contexto e Observações", Componente: SecaoConsultora },
+  { titulo: "Responsável, Contexto e Observações", Componente: SecaoConsultora },
 ];
 
 export default function FormularioPage() {
@@ -89,17 +89,18 @@ export default function FormularioPage() {
     const payload: NovoContratoPayload = {
       produto_id: values.produto_id,
       une_id: values.une_id,
+      numero_empresas: values.numero_empresas,
       empresas: values.empresas.map((e) => ({
         nome_razao_social: e.nome_razao_social,
         cpf_cnpj_responsavel: e.cpf_cnpj_responsavel,
         cidade: e.cidade || null,
         estado: e.estado || null,
-        faturamento_medio: e.faturamento_medio,
+        faturamento_medio: e.faturamento_medio ?? null,
       })),
       pessoas: values.pessoas.map((p) => ({
         cpf: p.cpf,
         nome_completo: p.nome_completo,
-        faturamento_medio: p.faturamento_medio,
+        faturamento_medio: p.faturamento_medio ?? null,
         telefone: p.telefone,
         email: p.email,
         data_nascimento: p.data_nascimento,
@@ -132,7 +133,7 @@ export default function FormularioPage() {
       },
       consultora_id: values.consultora_id,
       grau_dificuldade: values.grau_dificuldade,
-      contexto_perfil_cliente: values.contexto_perfil_cliente,
+      contexto_perfil_cliente: values.contexto_perfil_cliente || null,
       observacoes: values.observacoes || null,
     };
 

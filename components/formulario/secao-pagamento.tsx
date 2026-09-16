@@ -218,7 +218,7 @@ export function SecaoPagamento() {
           name="data_inicio_consultoria"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Data de Início da Consultoria</FormLabel>
+              <FormLabel>Data Início do Contrato</FormLabel>
               <FormControl>
                 <Input type="date" {...field} />
               </FormControl>

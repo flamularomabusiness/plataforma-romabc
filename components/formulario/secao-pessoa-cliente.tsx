@@ -182,7 +182,7 @@ export function SecaoPessoaCliente() {
                   name={`pessoas.${index}.faturamento_medio`}
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Faturamento Médio *</FormLabel>
+                      <FormLabel>Faturamento Médio</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="R$ 0,00"

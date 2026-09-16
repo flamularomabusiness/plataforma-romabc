@@ -249,7 +249,7 @@ async function fetchClienteDetalhesImpl(id: string): Promise<ClienteDetalhes> {
       supabase.from("pessoas_cliente").select("*").in("contrato_id", contratoIds),
       supabase
         .from("contrato_empresas")
-        .select("contrato_id, cliente:clientes(*)")
+        .select("contrato_id, eh_principal, cliente:clientes(*)")
         .in("contrato_id", contratoIds),
     ]);
     if (pagamentosRes.error) throw new Error(pagamentosRes.error.message);
@@ -259,8 +259,13 @@ async function fetchClienteDetalhesImpl(id: string): Promise<ClienteDetalhes> {
     pessoas = pessoasRes.data ?? [];
     for (const row of (empresasRes.data ?? []) as any[]) {
       const lista = empresasPorContrato.get(row.contrato_id) ?? [];
-      if (row.cliente) lista.push(row.cliente);
+      if (row.cliente) lista.push({ ...row.cliente, eh_principal: row.eh_principal });
       empresasPorContrato.set(row.contrato_id, lista);
+    }
+    // Principal primeiro, pra quem consome essa lista poder pegar empresasPorContrato[0]
+    // direto quando só precisa "a principal" sem procurar.
+    for (const lista of empresasPorContrato.values()) {
+      lista.sort((a, b) => Number(b.eh_principal) - Number(a.eh_principal));
     }
   }
 
@@ -646,6 +651,7 @@ export interface AtualizarContratoPayload {
   data_vencimento_mensal?: number;
   grau_dificuldade?: GrauDificuldade;
   status?: StatusContrato;
+  numero_empresas?: number;
 }
 
 export async function atualizarContrato(id: string, payload: AtualizarContratoPayload) {
@@ -1044,6 +1050,35 @@ export function useRemoverEmpresaDoContrato(clienteVistoId: string) {
       removerEmpresaDoContrato(contratoId, clienteId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cliente", clienteVistoId] });
+      queryClient.invalidateQueries({ queryKey: ["clientes"] });
+    },
+  });
+}
+
+/** Marca uma empresa como principal do contrato, desmarcando as demais (mesmo padrão de atualizarPessoaPrincipal). */
+export async function atualizarEmpresaPrincipal(contratoId: string, clienteId: string) {
+  const { error: errorOutras } = await supabase
+    .from("contrato_empresas")
+    .update({ eh_principal: false })
+    .eq("contrato_id", contratoId)
+    .neq("cliente_id", clienteId);
+  if (errorOutras) throw new Error(errorOutras.message);
+
+  const { error } = await supabase
+    .from("contrato_empresas")
+    .update({ eh_principal: true })
+    .eq("contrato_id", contratoId)
+    .eq("cliente_id", clienteId);
+  if (error) throw new Error(error.message);
+}
+
+export function useAtualizarEmpresaPrincipal(clienteId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ contratoId, empresaId }: { contratoId: string; empresaId: string }) =>
+      atualizarEmpresaPrincipal(contratoId, empresaId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cliente", clienteId] });
       queryClient.invalidateQueries({ queryKey: ["clientes"] });
     },
   });

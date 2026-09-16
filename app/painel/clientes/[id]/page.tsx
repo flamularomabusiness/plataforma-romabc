@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/status-badge";
+import { CardEmpresasContrato } from "@/components/clientes/card-empresas-contrato";
 import { useClienteDetalhes } from "@/lib/queries";
 import {
   cn,
@@ -208,41 +209,20 @@ export default function ClienteDetalhesPage() {
         <CardHeader>
           <CardTitle className="text-lg">Empresas</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Razão Social</TableHead>
-                <TableHead>CNPJ</TableHead>
-                <TableHead>Cidade/UF</TableHead>
-                <TableHead>Faturamento Médio</TableHead>
-                <TableHead>Contrato</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cliente.contratos.flatMap((c) => c.empresas).length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    Nenhuma empresa vinculada.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                cliente.contratos.flatMap((contrato) =>
-                  contrato.empresas.map((empresa) => (
-                    <TableRow key={`${contrato.id}-${empresa.id}`}>
-                      <TableCell className="font-medium">{empresa.nome_razao_social}</TableCell>
-                      <TableCell>{empresa.cpf_cnpj_responsavel}</TableCell>
-                      <TableCell>
-                        {empresa.cidade}/{empresa.estado}
-                      </TableCell>
-                      <TableCell>{formatBRL(empresa.faturamento_medio)}</TableCell>
-                      <TableCell>{contrato.produto?.nome ?? "-"}</TableCell>
-                    </TableRow>
-                  ))
-                )
-              )}
-            </TableBody>
-          </Table>
+        <CardContent className="space-y-6">
+          {cliente.contratos.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma empresa vinculada.</p>
+          ) : (
+            cliente.contratos.map((contrato) => (
+              <CardEmpresasContrato
+                key={contrato.id}
+                produtoNome={contrato.produto?.nome ?? "Contrato"}
+                numeroEmpresas={contrato.numero_empresas}
+                empresas={contrato.empresas}
+                clienteId={cliente.id}
+              />
+            ))
+          )}
         </CardContent>
       </Card>
 

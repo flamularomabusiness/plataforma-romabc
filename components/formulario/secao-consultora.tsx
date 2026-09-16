@@ -70,20 +70,22 @@ export function SecaoConsultora() {
         name="consultora_id"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Consultora Responsável *</FormLabel>
+            <FormLabel>Responsável *</FormLabel>
             {isLoading ? (
               <Skeleton className="h-10 w-full" />
             ) : (
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione a consultora" />
+                    <SelectValue placeholder="Selecione o responsável" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   {(consultoras ?? []).map((consultora) => (
                     <SelectItem key={consultora.id} value={consultora.id}>
-                      {consultora.nome}
+                      {consultora.especialidade
+                        ? `${consultora.nome} (${consultora.especialidade})`
+                        : consultora.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -99,7 +101,7 @@ export function SecaoConsultora() {
         name="grau_dificuldade"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Grau de Dificuldade *</FormLabel>
+            <FormLabel>Grau de Dificuldade</FormLabel>
             <FormControl>
               <div className="flex flex-col gap-2 sm:flex-row" role="radiogroup" aria-label="Grau de Dificuldade">
                 {GRAUS_DIFICULDADE.map((grau) => {
@@ -146,7 +148,7 @@ export function SecaoConsultora() {
           name="contexto_perfil_cliente"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Contexto e Perfil do Cliente/Empresa *</FormLabel>
+              <FormLabel>Contexto e Perfil do Cliente/Empresa</FormLabel>
               <FormControl>
                 <Textarea
                   className="h-[300px]"

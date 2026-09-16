@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, Pencil, Star, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,16 +23,17 @@ import {
 } from "@/components/ui/table";
 import {
   useAtualizarCliente,
+  useAtualizarEmpresaPrincipal,
   useRemoverEmpresaDoContrato,
   type AtualizarClientePayload,
 } from "@/lib/queries";
 import { formatCurrencyInput, maskCNPJ, maskCurrencyToNumber } from "@/lib/masks";
-import { ESTADOS_BR, type Cliente } from "@/lib/types";
+import { ESTADOS_BR, type EmpresaDoContrato } from "@/lib/types";
 
 export interface LinhaEmpresa {
   contratoId: string;
   produtoNome: string;
-  empresa: Cliente;
+  empresa: EmpresaDoContrato;
 }
 
 export function TabelaEmpresasEditavel({
@@ -46,8 +47,9 @@ export function TabelaEmpresasEditavel({
   const [form, setForm] = useState<AtualizarClientePayload>({});
   const atualizar = useAtualizarCliente(clienteId);
   const remover = useRemoverEmpresaDoContrato(clienteId);
+  const marcarPrincipal = useAtualizarEmpresaPrincipal(clienteId);
 
-  function iniciarEdicao(empresa: Cliente) {
+  function iniciarEdicao(empresa: EmpresaDoContrato) {
     setEditId(empresa.id);
     setForm({
       nome_razao_social: empresa.nome_razao_social,
@@ -91,6 +93,15 @@ export function TabelaEmpresasEditavel({
     }
   }
 
+  async function marcarComoPrincipal(linha: LinhaEmpresa) {
+    try {
+      await marcarPrincipal.mutateAsync({ contratoId: linha.contratoId, empresaId: linha.empresa.id });
+      toast.success("Empresa marcada como principal");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao marcar empresa como principal");
+    }
+  }
+
   return (
     <Table>
       <TableHeader>
@@ -100,13 +111,14 @@ export function TabelaEmpresasEditavel({
           <TableHead>Cidade/UF</TableHead>
           <TableHead>Faturamento Médio</TableHead>
           <TableHead>Contrato</TableHead>
+          <TableHead>Principal</TableHead>
           <TableHead className="text-right">Ação</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {linhas.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6} className="text-center text-muted-foreground">
+            <TableCell colSpan={7} className="text-center text-muted-foreground">
               Nenhuma empresa vinculada.
             </TableCell>
           </TableRow>
@@ -199,6 +211,21 @@ export function TabelaEmpresasEditavel({
                 </TableCell>
 
                 <TableCell>{linha.produtoNome}</TableCell>
+
+                <TableCell>
+                  {empresa.eh_principal ? (
+                    <Star className="h-4 w-4 fill-primary text-primary" />
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={marcarPrincipal.isPending}
+                      onClick={() => marcarComoPrincipal(linha)}
+                    >
+                      Marcar como principal
+                    </Button>
+                  )}
+                </TableCell>
 
                 <TableCell className="text-right">
                   {emEdicao ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useFieldArray, useFormContext } from "react-hook-form";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Star, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,6 +37,26 @@ export function SecaoEmpresaCliente() {
 
   return (
     <div className="space-y-4">
+      <FormField
+        control={form.control}
+        name="numero_empresas"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Quantas empresas estão naquele grupo? *</FormLabel>
+            <FormControl>
+              <Input
+                type="number"
+                min={1}
+                className="w-32"
+                value={field.value}
+                onChange={(e) => field.onChange(Number(e.target.value))}
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{fields.length} empresa(s) adicionada(s)</p>
         <Button
@@ -58,11 +78,20 @@ export function SecaoEmpresaCliente() {
       )}
 
       {fields.map((item, index) => (
-        <Card key={item.id} className="border-muted-foreground/30">
+        <Card
+          key={item.id}
+          className={index === 0 ? "border-primary/50" : "border-muted-foreground/30"}
+        >
           <CardContent className="space-y-4 pt-6">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-muted-foreground">
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
                 Empresa {index + 1}
+                {index === 0 && (
+                  <span className="inline-flex items-center gap-1 text-primary">
+                    <Star className="h-3.5 w-3.5 fill-primary" />
+                    Empresa Principal
+                  </span>
+                )}
               </span>
               <Button
                 type="button"
@@ -162,7 +191,7 @@ export function SecaoEmpresaCliente() {
               name={`empresas.${index}.faturamento_medio`}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Faturamento Médio *</FormLabel>
+                  <FormLabel>Faturamento Médio</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="R$ 0,00"

@@ -32,6 +32,7 @@ const novoContratoPayloadSchema = z.object({
   produto_id: z.string().uuid(),
   une_id: z.string().uuid(),
   empresas: z.array(empresaPayloadSchema).min(1, "Adicione ao menos 1 empresa"),
+  numero_empresas: z.number().int().min(1, "Informe o número de empresas do grupo"),
   pessoas: z
     .array(pessoaPayloadSchema)
     .min(1)
@@ -116,8 +117,8 @@ const novoContratoPayloadSchema = z.object({
       }
     }),
   consultora_id: z.string().uuid(),
-  grau_dificuldade: z.enum(GRAUS_DIFICULDADE),
-  contexto_perfil_cliente: z.string().min(1),
+  grau_dificuldade: z.enum(GRAUS_DIFICULDADE).optional(),
+  contexto_perfil_cliente: z.string().nullable().optional(),
   observacoes: z.string().nullable().optional(),
 });
 
