@@ -1084,6 +1084,90 @@ export function useAtualizarEmpresaPrincipal(clienteId: string) {
   });
 }
 
+export interface NovaEmpresaPayload {
+  nome_razao_social: string;
+  cpf_cnpj_responsavel: string;
+}
+
+/**
+ * Adiciona uma empresa direto a um contrato existente, fora do fluxo do
+ * formulário de Novo Contrato — usado pelo botão "Adicionar Empresa" na
+ * seção Empresas da tela do cliente. Sempre entra como secundária
+ * (eh_principal = false; trocar quem é principal é uma ação à parte).
+ *
+ * Se o CNPJ já existe como cliente (empresa usada em OUTRO contrato),
+ * reaproveita o cadastro em vez de duplicar — mesma lógica de upsert por
+ * CNPJ que criar_contrato_completo já usa. Só bloqueia se essa empresa já
+ * estiver ligada a ESTE MESMO contrato (decisão confirmada com o usuário:
+ * uma empresa pertencer a vários contratos é um cenário válido do sistema,
+ * não um erro).
+ */
+export async function adicionarEmpresaContrato(contratoId: string, payload: NovaEmpresaPayload) {
+  const { data: vinculadas, error: vinculadasError } = await supabase
+    .from("contrato_empresas")
+    .select("cliente:clientes(cpf_cnpj_responsavel)")
+    .eq("contrato_id", contratoId);
+  if (vinculadasError) throw new Error(vinculadasError.message);
+  const jaVinculada = (vinculadas ?? []).some(
+    (linha: any) => linha.cliente?.cpf_cnpj_responsavel === payload.cpf_cnpj_responsavel
+  );
+  if (jaVinculada) {
+    throw new Error("Esta empresa já está vinculada a este contrato.");
+  }
+
+  const { data: existente, error: existenteError } = await supabase
+    .from("clientes")
+    .select("id")
+    .eq("cpf_cnpj_responsavel", payload.cpf_cnpj_responsavel)
+    .maybeSingle();
+  if (existenteError) throw new Error(existenteError.message);
+
+  let clienteId = existente?.id as string | undefined;
+  if (!clienteId) {
+    const { data: novoCliente, error: insertError } = await supabase
+      .from("clientes")
+      .insert({
+        nome_razao_social: payload.nome_razao_social,
+        cpf_cnpj_responsavel: payload.cpf_cnpj_responsavel,
+        ativo: true,
+      })
+      .select("id")
+      .single();
+    if (insertError) throw new Error(insertError.message);
+    clienteId = novoCliente.id;
+  }
+
+  const { error: linkError } = await supabase
+    .from("contrato_empresas")
+    .insert({ contrato_id: contratoId, cliente_id: clienteId, eh_principal: false });
+  if (linkError) throw new Error(linkError.message);
+
+  const { data: contrato, error: contratoError } = await supabase
+    .from("contratos")
+    .select("numero_empresas")
+    .eq("id", contratoId)
+    .single();
+  if (contratoError) throw new Error(contratoError.message);
+
+  const { error: updateError } = await supabase
+    .from("contratos")
+    .update({ numero_empresas: (contrato?.numero_empresas ?? 1) + 1 })
+    .eq("id", contratoId);
+  if (updateError) throw new Error(updateError.message);
+}
+
+export function useAdicionarEmpresaContrato(clienteId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ contratoId, payload }: { contratoId: string; payload: NovaEmpresaPayload }) =>
+      adicionarEmpresaContrato(contratoId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cliente", clienteId] });
+      queryClient.invalidateQueries({ queryKey: ["clientes"] });
+    },
+  });
+}
+
 export function useAtualizarContrato(clienteId: string) {
   const queryClient = useQueryClient();
   return useMutation({

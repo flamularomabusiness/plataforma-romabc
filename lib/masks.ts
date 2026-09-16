@@ -12,6 +12,29 @@ export function maskCNPJ(value: string): string {
   return result;
 }
 
+/** Checksum real do CNPJ (módulo 11), não só o formato — rejeita sequências como "11111111000111". */
+export function validarCNPJ(cnpj: string): boolean {
+  const digits = cnpj.replace(/\D/g, "");
+  if (digits.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(digits)) return false;
+
+  function digitoVerificador(base: string, pesos: number[]): number {
+    const soma = base
+      .split("")
+      .reduce((acc, char, i) => acc + Number(char) * pesos[i], 0);
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  }
+
+  const pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+  const d1 = digitoVerificador(digits.slice(0, 12), pesos1);
+  const d2 = digitoVerificador(digits.slice(0, 12) + d1, pesos2);
+
+  return digits.slice(12) === `${d1}${d2}`;
+}
+
 export function maskCPF(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   let result = digits;

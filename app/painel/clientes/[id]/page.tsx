@@ -216,6 +216,7 @@ export default function ClienteDetalhesPage() {
             cliente.contratos.map((contrato) => (
               <CardEmpresasContrato
                 key={contrato.id}
+                contratoId={contrato.id}
                 produtoNome={contrato.produto?.nome ?? "Contrato"}
                 numeroEmpresas={contrato.numero_empresas}
                 empresas={contrato.empresas}
