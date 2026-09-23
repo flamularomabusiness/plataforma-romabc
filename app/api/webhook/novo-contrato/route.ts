@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import {
+  FORMAS_PAGAMENTO,
   FUNCOES_PESSOA,
   GRAUS_DIFICULDADE,
+  TIPOS_ENTRADA,
   TIPOS_PAGAMENTO,
   type CriarContratoRPCResult,
 } from "@/lib/types";
@@ -54,12 +56,34 @@ const novoContratoPayloadSchema = z.object({
       data_pagamento_unico: z.string().min(1).optional(),
       // Venda única + Parcelado
       valor_total: z.number().positive().optional(),
+      // Recorrente + Venda única
+      forma_pagamento: z.enum(FORMAS_PAGAMENTO).optional(),
       // Parcelado
-      valor_entrada: z.number().nonnegative().optional(),
-      data_entrada: z.string().min(1).optional(),
       numero_parcelas: z.number().int().min(2).max(12).optional(),
       parcelas: z
-        .array(z.object({ valor: z.number().positive(), data: z.string().min(1) }))
+        .array(
+          z.object({
+            valor: z.number().positive(),
+            data: z.string().min(1),
+            forma_pagamento: z.enum(FORMAS_PAGAMENTO),
+          })
+        )
+        .optional(),
+      // Entrada do Contrato — independente do tipo_pagamento acima.
+      entrada: z
+        .object({
+          tipo: z.enum(TIPOS_ENTRADA),
+          parcelas: z
+            .array(
+              z.object({
+                valor: z.number().positive(),
+                data: z.string().min(1),
+                forma_pagamento: z.enum(FORMAS_PAGAMENTO),
+              })
+            )
+            .min(1)
+            .max(5),
+        })
         .optional(),
       // Comuns
       data_inicio_consultoria: z.string().nullable().optional(),
@@ -76,6 +100,9 @@ const novoContratoPayloadSchema = z.object({
         if (!pagamento.data_vencimento_mensal) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe o dia de vencimento", path: ["data_vencimento_mensal"] });
         }
+        if (!pagamento.forma_pagamento) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Selecione a forma de pagamento", path: ["forma_pagamento"] });
+        }
       }
 
       if (pagamento.tipo_pagamento === "venda_unica") {
@@ -85,17 +112,14 @@ const novoContratoPayloadSchema = z.object({
         if (!pagamento.data_pagamento_unico) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe a data do pagamento", path: ["data_pagamento_unico"] });
         }
+        if (!pagamento.forma_pagamento) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Selecione a forma de pagamento", path: ["forma_pagamento"] });
+        }
       }
 
       if (pagamento.tipo_pagamento === "parcelado") {
         if (!pagamento.valor_total) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe o valor total do contrato", path: ["valor_total"] });
-        }
-        if (pagamento.valor_entrada === undefined) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe o valor de entrada", path: ["valor_entrada"] });
-        }
-        if (!pagamento.data_entrada) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe a data de entrada", path: ["data_entrada"] });
         }
         if (!pagamento.numero_parcelas) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe o número de parcelas", path: ["numero_parcelas"] });
@@ -104,12 +128,12 @@ const novoContratoPayloadSchema = z.object({
         if (pagamento.numero_parcelas && parcelas.length !== pagamento.numero_parcelas) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Preencha todas as parcelas", path: ["parcelas"] });
         }
-        if (pagamento.valor_total && pagamento.valor_entrada !== undefined) {
-          const soma = pagamento.valor_entrada + parcelas.reduce((acc, p) => acc + p.valor, 0);
+        if (pagamento.valor_total) {
+          const soma = parcelas.reduce((acc, p) => acc + p.valor, 0);
           if (Math.abs(soma - pagamento.valor_total) > 0.01) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
-              message: "A soma da entrada + parcelas precisa ser igual ao valor total do contrato",
+              message: "A soma das parcelas precisa ser igual ao valor total do contrato",
               path: ["parcelas"],
             });
           }

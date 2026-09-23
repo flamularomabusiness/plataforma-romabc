@@ -7,6 +7,13 @@ import { Check, Lock, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -19,8 +26,13 @@ import { PagamentoStatusDropdown } from "@/components/pagamento-status-dropdown"
 import { podeAcessar, useUserRole } from "@/lib/auth";
 import { useAtualizarPagamento, type AtualizarPagamentoPayload } from "@/lib/queries";
 import { formatBRL, formatDate } from "@/lib/utils";
-import type { PagamentoProjetado } from "@/lib/types";
+import { FORMAS_PAGAMENTO, type FormaPagamento, type PagamentoProjetado } from "@/lib/types";
 import { maskCurrencyToNumber, formatCurrencyInput } from "@/lib/masks";
+
+const FORMA_PAGAMENTO_LABELS: Record<FormaPagamento, string> = {
+  pix: "PIX",
+  boleto: "Boleto",
+};
 
 /** Hoje em "YYYY-MM-DD" — comparável por ordem lexicográfica com data_vencimento. */
 function hojeISO(): string {
@@ -85,6 +97,7 @@ export function TabelaPagamentosEditavel({
     setForm({
       valor_projetado: pagamento.valor_projetado,
       data_vencimento: pagamento.data_vencimento ?? undefined,
+      forma_pagamento: pagamento.forma_pagamento ?? undefined,
     });
   }
 
@@ -126,6 +139,7 @@ export function TabelaPagamentosEditavel({
     const payload: AtualizarPagamentoPayload = {
       valor_projetado: form.valor_projetado,
       ...(dataMudou ? { data_vencimento: novaData } : {}),
+      ...(form.forma_pagamento ? { forma_pagamento: form.forma_pagamento } : {}),
     };
 
     try {
@@ -145,6 +159,7 @@ export function TabelaPagamentosEditavel({
           <TableHead>Mês/Ano</TableHead>
           <TableHead>Valor</TableHead>
           <TableHead>Vencimento</TableHead>
+          <TableHead>Forma</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Data Pagamento</TableHead>
           <TableHead className="text-right">Ação</TableHead>
@@ -153,7 +168,7 @@ export function TabelaPagamentosEditavel({
       <TableBody>
         {pagamentos.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center text-muted-foreground">
+            <TableCell colSpan={8} className="text-center text-muted-foreground">
               Nenhum pagamento projetado.
             </TableCell>
           </TableRow>
@@ -161,14 +176,21 @@ export function TabelaPagamentosEditavel({
           pagamentos.map((pagamento) => {
             const emEdicao = editId === pagamento.id;
             const editavel = pagamento.status === "PROJETADO";
+            const totalEntrada = pagamento.eh_entrada
+              ? pagamentos.filter((p) => p.eh_entrada && p.contrato_id === pagamento.contrato_id).length
+              : 0;
             return (
               <TableRow key={pagamento.id}>
                 <TableCell>
-                  {pagamento.numero_parcela === 0
-                    ? "Entrada"
-                    : pagamento.numero_parcela
-                      ? `Parcela ${pagamento.numero_parcela}`
-                      : "-"}
+                  {pagamento.eh_entrada
+                    ? totalEntrada > 1
+                      ? `Entrada ${pagamento.numero_parcela}/${totalEntrada}`
+                      : "Entrada"
+                    : pagamento.numero_parcela === 0
+                      ? "Entrada"
+                      : pagamento.numero_parcela
+                        ? `Parcela ${pagamento.numero_parcela}`
+                        : "-"}
                 </TableCell>
                 <TableCell>
                   {String(pagamento.mes).padStart(2, "0")}/{pagamento.ano}
@@ -209,6 +231,32 @@ export function TabelaPagamentosEditavel({
                     </span>
                   ) : (
                     formatDate(pagamento.data_vencimento)
+                  )}
+                </TableCell>
+
+                <TableCell>
+                  {emEdicao ? (
+                    <Select
+                      value={form.forma_pagamento}
+                      onValueChange={(v) =>
+                        setForm((f) => ({ ...f, forma_pagamento: v as FormaPagamento }))
+                      }
+                    >
+                      <SelectTrigger className="w-28">
+                        <SelectValue placeholder="Forma" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FORMAS_PAGAMENTO.map((forma) => (
+                          <SelectItem key={forma} value={forma}>
+                            {FORMA_PAGAMENTO_LABELS[forma]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : pagamento.forma_pagamento ? (
+                    FORMA_PAGAMENTO_LABELS[pagamento.forma_pagamento]
+                  ) : (
+                    "-"
                   )}
                 </TableCell>
 

@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/status-badge";
 import { CardEmpresasContrato } from "@/components/clientes/card-empresas-contrato";
+import { CardDocumentos } from "@/components/clientes/card-documentos";
 import { useClienteDetalhes } from "@/lib/queries";
 import {
   cn,
@@ -36,11 +37,30 @@ import {
 } from "@/lib/utils";
 import {
   STATUS_PAGAMENTO,
+  type FormaPagamento,
+  type PagamentoProjetado,
   type StatusCliente,
   type StatusContrato,
   type StatusPagamento,
   type TipoPagamento,
 } from "@/lib/types";
+
+const FORMA_PAGAMENTO_LABELS: Record<FormaPagamento, string> = {
+  pix: "PIX",
+  boleto: "Boleto",
+};
+
+function rotuloParcela(pagamento: PagamentoProjetado, index: number, lista: PagamentoProjetado[]): string {
+  if (pagamento.eh_entrada) {
+    const totalEntrada = lista.filter(
+      (p) => p.eh_entrada && p.contrato_id === pagamento.contrato_id
+    ).length;
+    return totalEntrada > 1 ? `Entrada ${pagamento.numero_parcela}/${totalEntrada}` : "Entrada";
+  }
+  if (pagamento.numero_parcela === 0) return "Entrada";
+  if (pagamento.numero_parcela) return `Parcela ${pagamento.numero_parcela}`;
+  return `${index + 1}/${lista.length}`;
+}
 
 const STATUS_PAGAMENTO_FILTRO_LABEL: Record<StatusPagamento, string> = {
   PROJETADO: "Projetados",
@@ -343,14 +363,25 @@ export default function ClienteDetalhesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                cliente.contratos.map((contrato) => (
+                cliente.contratos.map((contrato) => {
+                  const primeiroPagamento = pagamentos
+                    .filter((p) => p.contrato_id === contrato.id && p.forma_pagamento)
+                    .sort((a, b) => (a.data_vencimento ?? "").localeCompare(b.data_vencimento ?? ""))[0];
+                  return (
                   <TableRow key={contrato.id}>
                     <TableCell className="font-medium">
                       {contrato.produto?.nome ?? "-"}
                     </TableCell>
                     <TableCell>{contrato.une?.nome ?? "-"}</TableCell>
                     <TableCell>{TIPO_PAGAMENTO_LABEL[contrato.tipo_pagamento]}</TableCell>
-                    <TableCell>{resumoPagamento(contrato)}</TableCell>
+                    <TableCell>
+                      {resumoPagamento(contrato)}
+                      {primeiroPagamento?.forma_pagamento && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          ({FORMA_PAGAMENTO_LABELS[primeiroPagamento.forma_pagamento]})
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={STATUS_CONTRATO_VARIANT[contrato.status]}>
                         {contrato.status}
@@ -362,10 +393,30 @@ export default function ClienteDetalhesPage() {
                       </Badge>
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Documentos</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {cliente.contratos.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum contrato cadastrado.</p>
+          ) : (
+            cliente.contratos.map((contrato) => (
+              <CardDocumentos
+                key={contrato.id}
+                contratoId={contrato.id}
+                produtoNome={contrato.produto?.nome ?? "Contrato"}
+              />
+            ))
+          )}
         </CardContent>
       </Card>
 
@@ -417,31 +468,31 @@ export default function ClienteDetalhesPage() {
                 <TableHead>Mês/Ano</TableHead>
                 <TableHead>Valor</TableHead>
                 <TableHead>Vencimento</TableHead>
+                <TableHead>Forma</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {pagamentosFiltrados.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
                     Nenhum pagamento encontrado.
                   </TableCell>
                 </TableRow>
               ) : (
                 pagamentosFiltrados.map((pagamento, index) => (
                   <TableRow key={pagamento.id}>
-                    <TableCell>
-                      {pagamento.numero_parcela === 0
-                        ? "Entrada"
-                        : pagamento.numero_parcela
-                          ? `Parcela ${pagamento.numero_parcela}`
-                          : `${index + 1}/${pagamentosFiltrados.length}`}
-                    </TableCell>
+                    <TableCell>{rotuloParcela(pagamento, index, pagamentosFiltrados)}</TableCell>
                     <TableCell>
                       {String(pagamento.mes).padStart(2, "0")}/{pagamento.ano}
                     </TableCell>
                     <TableCell>{formatBRL(pagamento.valor_projetado)}</TableCell>
                     <TableCell>{formatDate(pagamento.data_vencimento)}</TableCell>
+                    <TableCell>
+                      {pagamento.forma_pagamento
+                        ? FORMA_PAGAMENTO_LABELS[pagamento.forma_pagamento]
+                        : "-"}
+                    </TableCell>
                     <TableCell>
                       <StatusBadge status={pagamento.status} size="sm" />
                     </TableCell>

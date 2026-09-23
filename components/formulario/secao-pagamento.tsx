@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useFormContext } from "react-hook-form";
 
 import {
@@ -8,7 +8,6 @@ import {
   FormItem,
   FormLabel,
   FormControl,
-  FormDescription,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -19,9 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PLANOS, TIPOS_PAGAMENTO, type TipoPagamento } from "@/lib/types";
+import { FORMAS_PAGAMENTO, TIPOS_PAGAMENTO, type FormaPagamento, type TipoPagamento } from "@/lib/types";
 import { maskCurrencyToNumber, formatCurrencyInput } from "@/lib/masks";
+import { useProdutoPlanos } from "@/lib/queries";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SecaoParcelas } from "./secao-parcelas";
+import { SecaoEntradaContrato } from "./secao-entrada";
 import type { FormularioContratoValues } from "./form-schema";
 
 const TIPO_PAGAMENTO_LABELS: Record<TipoPagamento, string> = {
@@ -30,11 +32,18 @@ const TIPO_PAGAMENTO_LABELS: Record<TipoPagamento, string> = {
   parcelado: "Parcelado",
 };
 
+const FORMA_PAGAMENTO_LABELS: Record<FormaPagamento, string> = {
+  pix: "PIX",
+  boleto: "Boleto",
+};
+
 export function SecaoPagamento() {
   const form = useFormContext<FormularioContratoValues>();
   const tipoPagamento = form.watch("tipo_pagamento");
   const valorMensal = form.watch("valor_mensal");
   const valorPrimeiroPagamento = form.watch("valor_primeiro_pagamento");
+  const produtoId = form.watch("produto_id");
+  const { data: planos, isLoading: loadingPlanos } = useProdutoPlanos(produtoId);
 
   useEffect(() => {
     if (valorPrimeiroPagamento === null || valorPrimeiroPagamento === undefined) {
@@ -44,6 +53,15 @@ export function SecaoPagamento() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valorMensal]);
+
+  // Trocar de produto invalida o plano escolhido (planos são por produto) —
+  // ignora o mount inicial pra não apagar um plano restaurado do rascunho.
+  const produtoIdMontagem = useRef(produtoId);
+  useEffect(() => {
+    if (produtoId === produtoIdMontagem.current) return;
+    form.setValue("plano_contratado", "", { shouldValidate: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [produtoId]);
 
   return (
     <div className="space-y-6">
@@ -79,21 +97,32 @@ export function SecaoPagamento() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Plano Contratado *</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o plano" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {PLANOS.map((plano) => (
-                    <SelectItem key={plano} value={plano}>
-                      {plano}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormDescription>Em breve: múltiplos planos com valores próprios.</FormDescription>
+              {loadingPlanos ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value}
+                  disabled={!produtoId || (planos ?? []).length === 0}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          produtoId ? "Selecione o plano" : "Selecione um produto primeiro"
+                        }
+                      />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {(planos ?? []).map((plano) => (
+                      <SelectItem key={plano.id} value={plano.nome}>
+                        {plano.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -174,6 +203,31 @@ export function SecaoPagamento() {
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name="forma_pagamento_padrao"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Forma de Pagamento *</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {FORMAS_PAGAMENTO.map((forma) => (
+                        <SelectItem key={forma} value={forma}>
+                          {FORMA_PAGAMENTO_LABELS[forma]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </>
         )}
 
@@ -210,6 +264,31 @@ export function SecaoPagamento() {
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name="forma_pagamento_padrao"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Forma de Pagamento *</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {FORMAS_PAGAMENTO.map((forma) => (
+                        <SelectItem key={forma} value={forma}>
+                          {FORMA_PAGAMENTO_LABELS[forma]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </>
         )}
 
@@ -241,6 +320,8 @@ export function SecaoPagamento() {
           )}
         />
       </div>
+
+      <SecaoEntradaContrato />
 
       {tipoPagamento === "parcelado" && <SecaoParcelas />}
     </div>

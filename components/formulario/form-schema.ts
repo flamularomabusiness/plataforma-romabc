@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { ESTADOS_BR, FUNCOES_PESSOA, GRAUS_DIFICULDADE, TIPOS_PAGAMENTO } from "@/lib/types";
+import {
+  ESTADOS_BR,
+  FORMAS_PAGAMENTO,
+  FUNCOES_PESSOA,
+  GRAUS_DIFICULDADE,
+  TIPOS_ENTRADA,
+  TIPOS_PAGAMENTO,
+} from "@/lib/types";
 
 export const empresaSchema = z.object({
   nome_razao_social: z.string().min(1, "Razão social é obrigatória"),
@@ -15,6 +22,9 @@ export const empresaSchema = z.object({
 export const parcelaSchema = z.object({
   valor: z.number().positive("Informe o valor da parcela"),
   data: z.string().min(1, "Informe a data da parcela"),
+  forma_pagamento: z.enum(FORMAS_PAGAMENTO, {
+    errorMap: () => ({ message: "Selecione a forma de pagamento" }),
+  }),
 });
 
 export const pessoaSchema = z.object({
@@ -81,11 +91,18 @@ export const formularioContratoSchema = z
     // Venda única + Parcelado
     valor_total: z.number().nonnegative("Informe um valor válido").optional(),
 
+    // Recorrente + Venda única (1 forma pra todas as parcelas geradas)
+    forma_pagamento_padrao: z.enum(FORMAS_PAGAMENTO).optional(),
+
     // Parcelado
-    valor_entrada: z.number().nonnegative("Informe um valor válido").optional(),
-    data_entrada: z.string().optional().or(z.literal("")),
     numero_parcelas: z.number().int().min(2).max(12).optional(),
     parcelas: z.array(parcelaSchema).optional(),
+
+    // Entrada do Contrato — novo, independente do tipo_pagamento acima.
+    tem_entrada: z.boolean().default(false),
+    tipo_entrada: z.enum(TIPOS_ENTRADA).optional(),
+    entrada_numero_parcelas: z.number().int().min(1).max(5).optional(),
+    entrada_parcelas: z.array(parcelaSchema).max(5).optional(),
 
     // Comuns
     data_inicio_consultoria: z.string().optional().or(z.literal("")),
@@ -131,6 +148,13 @@ export const formularioContratoSchema = z
           path: ["data_vencimento_mensal"],
         });
       }
+      if (!data.forma_pagamento_padrao) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Selecione a forma de pagamento",
+          path: ["forma_pagamento_padrao"],
+        });
+      }
     }
 
     if (data.tipo_pagamento === "venda_unica") {
@@ -148,6 +172,13 @@ export const formularioContratoSchema = z
           path: ["data_pagamento_unico"],
         });
       }
+      if (!data.forma_pagamento_padrao) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Selecione a forma de pagamento",
+          path: ["forma_pagamento_padrao"],
+        });
+      }
     }
 
     if (data.tipo_pagamento === "parcelado") {
@@ -156,20 +187,6 @@ export const formularioContratoSchema = z
           code: z.ZodIssueCode.custom,
           message: "Informe o valor total do contrato",
           path: ["valor_total"],
-        });
-      }
-      if (data.valor_entrada === undefined || data.valor_entrada === null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Informe o valor de entrada",
-          path: ["valor_entrada"],
-        });
-      }
-      if (!data.data_entrada) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Informe a data de entrada",
-          path: ["data_entrada"],
         });
       }
       if (!data.numero_parcelas || data.numero_parcelas < 2 || data.numero_parcelas > 12) {
@@ -189,19 +206,53 @@ export const formularioContratoSchema = z
         });
       }
 
-      if (
-        data.valor_total &&
-        data.valor_entrada !== undefined &&
-        data.valor_entrada !== null &&
-        parcelas.length > 0 &&
-        parcelas.every((p) => p.valor > 0 && p.data)
-      ) {
-        const soma = data.valor_entrada + parcelas.reduce((acc, p) => acc + p.valor, 0);
+      if (data.valor_total && parcelas.length > 0 && parcelas.every((p) => p.valor > 0 && p.data)) {
+        const soma = parcelas.reduce((acc, p) => acc + p.valor, 0);
         if (Math.abs(soma - data.valor_total) > 0.01) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "A soma da entrada + parcelas precisa ser igual ao valor total do contrato",
+            message: "A soma das parcelas precisa ser igual ao valor total do contrato",
             path: ["parcelas"],
+          });
+        }
+      }
+    }
+
+    // Entrada do Contrato — independente do tipo_pagamento, roda sempre.
+    if (data.tem_entrada) {
+      if (!data.tipo_entrada) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Selecione o tipo de entrada",
+          path: ["tipo_entrada"],
+        });
+      } else if (data.tipo_entrada === "a_vista") {
+        const parcela = data.entrada_parcelas?.[0];
+        if (!parcela || !(parcela.valor > 0) || !parcela.data) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Informe o valor e a data da entrada",
+            path: ["entrada_parcelas"],
+          });
+        }
+      } else if (data.tipo_entrada === "parcelado") {
+        if (!data.entrada_numero_parcelas || data.entrada_numero_parcelas < 1 || data.entrada_numero_parcelas > 5) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Selecione entre 1 e 5 parcelas",
+            path: ["entrada_numero_parcelas"],
+          });
+        }
+        const entradaParcelas = data.entrada_parcelas ?? [];
+        if (
+          data.entrada_numero_parcelas &&
+          (entradaParcelas.length !== data.entrada_numero_parcelas ||
+            entradaParcelas.some((p) => !(p.valor > 0) || !p.data))
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Preencha todas as parcelas da entrada",
+            path: ["entrada_parcelas"],
           });
         }
       }
@@ -237,17 +288,20 @@ export const valoresPadrao: FormularioContratoValues = {
   empresas: [empresaVazia],
   pessoas: [{ ...pessoaVazia, eh_principal: true }],
   tipo_pagamento: "recorrente",
-  plano_contratado: "Padrão",
+  plano_contratado: "",
   valor_mensal: 0,
   data_inicio_primeiro_pagamento: "",
   valor_primeiro_pagamento: null,
   data_vencimento_mensal: 5,
   data_pagamento_unico: "",
   valor_total: 0,
-  valor_entrada: 0,
-  data_entrada: "",
+  forma_pagamento_padrao: undefined,
   numero_parcelas: 2,
   parcelas: [],
+  tem_entrada: false,
+  tipo_entrada: undefined,
+  entrada_numero_parcelas: 1,
+  entrada_parcelas: [],
   data_inicio_consultoria: "",
   data_onboarding: "",
   consultora_id: "",

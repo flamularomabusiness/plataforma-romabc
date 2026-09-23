@@ -1,5 +1,18 @@
 import { supabase } from "./supabase";
-import type { StatusCliente, StatusPagamento } from "./types";
+import type { Consultora, StatusCliente, StatusPagamento } from "./types";
+
+/**
+ * Filtra consultoras pelo produto escolhido no formulário — array
+ * `produtos` vazio é o fallback "aparece pra qualquer produto" (preserva o
+ * comportamento anterior pra quem ainda não foi associado a nenhum).
+ */
+export function filtrarConsultorasPorProduto(
+  consultoras: Consultora[],
+  produtoId: string | null | undefined
+): Consultora[] {
+  if (!produtoId) return consultoras;
+  return consultoras.filter((c) => c.produtos.length === 0 || c.produtos.includes(produtoId));
+}
 
 const DIAS_INATIVIDADE = 60;
 const DIAS_INADIMPLENCIA_PAGAMENTO = 90;

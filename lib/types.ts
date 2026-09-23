@@ -22,11 +22,14 @@ export type FuncaoContato = (typeof FUNCOES_CONTATO)[number];
 export const FUNCOES_PESSOA = ["DONO", "FINANCEIRO", "SOCIO", "OUTRO"] as const;
 export type FuncaoPessoa = (typeof FUNCOES_PESSOA)[number];
 
-export const PLANOS = ["Padrão"] as const;
-export type Plano = (typeof PLANOS)[number];
-
 export const TIPOS_PAGAMENTO = ["recorrente", "venda_unica", "parcelado"] as const;
 export type TipoPagamento = (typeof TIPOS_PAGAMENTO)[number];
+
+export const FORMAS_PAGAMENTO = ["pix", "boleto"] as const;
+export type FormaPagamento = (typeof FORMAS_PAGAMENTO)[number];
+
+export const TIPOS_ENTRADA = ["a_vista", "parcelado"] as const;
+export type TipoEntrada = (typeof TIPOS_ENTRADA)[number];
 
 /**
  * Status do cliente — gravado (maiúsculo) em clientes.status, com check
@@ -74,6 +77,16 @@ export interface Produto {
   data_atualizacao: string;
 }
 
+/** Plano de um produto (ex.: START/FORTALECER/PERFORMAR) — supabase/migration_produtos_planos.sql. */
+export interface ProdutoPlano {
+  id: string;
+  produto_id: string;
+  nome: string;
+  descricao: string | null;
+  ativo: boolean;
+  data_criacao: string;
+}
+
 export interface Consultora {
   id: string;
   nome: string;
@@ -83,6 +96,8 @@ export interface Consultora {
   /** Exibido no formulário como "Nome (especialidade)" — ex.: "consultoria", "CFO". */
   especialidade: string | null;
   ativo: boolean;
+  /** Produtos que essa pessoa atende — array vazio = aparece pra qualquer produto. */
+  produtos: string[];
   data_criacao: string;
   data_atualizacao: string;
 }
@@ -200,8 +215,11 @@ export interface PagamentoProjetado {
   status: StatusPagamento;
   data_pagamento_real: string | null;
   valor_recebido: number | null;
-  /** Número da parcela em contratos parcelados (0 = entrada, 1..N = parcelas). Null para recorrente/venda_única. */
+  /** Número da parcela em contratos parcelados (0 = entrada legada, 1..N = parcelas). Null para recorrente/venda_única. */
   numero_parcela: number | null;
+  forma_pagamento: FormaPagamento | null;
+  /** true = linha do grupo "Entrada do Contrato" (novo, independente do tipo_pagamento) — numero_parcela é a numeração própria desse grupo (1..N), não a do cronograma principal. */
+  eh_entrada: boolean;
   data_criacao: string;
   data_atualizacao: string;
 }
@@ -242,11 +260,16 @@ export interface NovoContratoPayload {
     data_pagamento_unico?: string;
     // Venda única + Parcelado
     valor_total?: number;
+    // Recorrente + Venda única (1 forma pra todas as parcelas geradas)
+    forma_pagamento?: FormaPagamento;
     // Parcelado
-    valor_entrada?: number;
-    data_entrada?: string;
     numero_parcelas?: number;
-    parcelas?: Array<{ valor: number; data: string }>;
+    parcelas?: Array<{ valor: number; data: string; forma_pagamento: FormaPagamento }>;
+    // Entrada do Contrato — novo, independente do tipo_pagamento acima.
+    entrada?: {
+      tipo: TipoEntrada;
+      parcelas: Array<{ valor: number; data: string; forma_pagamento: FormaPagamento }>;
+    };
     // Comuns
     data_inicio_consultoria?: string | null;
     data_onboarding?: string | null;
@@ -480,4 +503,19 @@ export interface ClienteFiltros {
 export interface CriarContratoRPCResult {
   cliente_id: string;
   contrato_id: string;
+}
+
+export const TIPOS_DOCUMENTO = ["empresa", "cliente"] as const;
+export type TipoDocumento = (typeof TIPOS_DOCUMENTO)[number];
+
+/** Documento anexado a um contrato — supabase/migration_contrato_documentos.sql. */
+export interface ContratoDocumento {
+  id: string;
+  contrato_id: string;
+  tipo: TipoDocumento;
+  nome_arquivo: string;
+  caminho_storage: string;
+  tamanho_bytes: number | null;
+  uploaded_by: string;
+  data_criacao: string;
 }

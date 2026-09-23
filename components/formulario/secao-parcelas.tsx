@@ -22,7 +22,13 @@ import {
 } from "@/components/ui/select";
 import { maskCurrencyToNumber, formatCurrencyInput } from "@/lib/masks";
 import { cn, formatBRL } from "@/lib/utils";
+import { FORMAS_PAGAMENTO, type FormaPagamento } from "@/lib/types";
 import type { FormularioContratoValues } from "./form-schema";
+
+const FORMA_PAGAMENTO_LABELS: Record<FormaPagamento, string> = {
+  pix: "PIX",
+  boleto: "Boleto",
+};
 
 const OPCOES_PARCELAS = Array.from({ length: 11 }, (_, i) => i + 2); // 2..12
 
@@ -32,7 +38,6 @@ export function SecaoParcelas() {
 
   const numeroParcelas = form.watch("numero_parcelas");
   const valorTotal = form.watch("valor_total") ?? 0;
-  const valorEntrada = form.watch("valor_entrada") ?? 0;
   const parcelas = form.watch("parcelas") ?? [];
 
   // Mudar o select de "Quantas Parcelas?" precisa adicionar/remover campos
@@ -42,14 +47,16 @@ export function SecaoParcelas() {
     const alvo = numeroParcelas ?? 0;
     if (fields.length === alvo) return;
     const atuais = form.getValues("parcelas") ?? [];
-    const novas = Array.from({ length: alvo }, (_, i) => atuais[i] ?? { valor: 0, data: "" });
+    const novas = Array.from(
+      { length: alvo },
+      (_, i) => atuais[i] ?? { valor: 0, data: "", forma_pagamento: undefined as unknown as FormaPagamento }
+    );
     replace(novas);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [numeroParcelas]);
 
   const totalParcelas = parcelas.reduce((acc, p) => acc + (p?.valor ?? 0), 0);
-  const somaTotal = valorEntrada + totalParcelas;
-  const diferenca = somaTotal - valorTotal;
+  const diferenca = totalParcelas - valorTotal;
   const bateComTotal = Math.abs(diferenca) <= 0.01;
 
   return (
@@ -101,47 +108,12 @@ export function SecaoParcelas() {
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="valor_entrada"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Valor de Entrada *</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="R$ 0,00"
-                  value={
-                    field.value === null || field.value === undefined
-                      ? ""
-                      : formatCurrencyInput(field.value)
-                  }
-                  onChange={(e) => field.onChange(maskCurrencyToNumber(e.target.value))}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="data_entrada"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Data de Entrada *</FormLabel>
-              <FormControl>
-                <Input type="date" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
       </div>
 
       <div className="space-y-3">
         {fields.map((item, index) => (
           <Card key={item.id} className="border-muted-foreground/30">
-            <CardContent className="grid items-start gap-3 pt-6 sm:grid-cols-[1fr_1fr_1fr]">
+            <CardContent className="grid items-start gap-3 pt-6 sm:grid-cols-[auto_1fr_1fr_1fr]">
               <span className="self-center text-sm font-semibold text-muted-foreground">
                 Parcela {index + 1} de {fields.length}
               </span>
@@ -177,6 +149,31 @@ export function SecaoParcelas() {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name={`parcelas.${index}.forma_pagamento`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="sr-only">Forma de Pagamento</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Forma" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {FORMAS_PAGAMENTO.map((forma) => (
+                          <SelectItem key={forma} value={forma}>
+                            {FORMA_PAGAMENTO_LABELS[forma]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </CardContent>
           </Card>
         ))}
@@ -184,16 +181,8 @@ export function SecaoParcelas() {
 
       <div className="space-y-1 rounded-lg border p-4 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Total Entrada</span>
-          <span className="font-medium">{formatBRL(valorEntrada)}</span>
-        </div>
-        <div className="flex justify-between">
           <span className="text-muted-foreground">Total Parcelas</span>
           <span className="font-medium">{formatBRL(totalParcelas)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Soma Total</span>
-          <span className="font-medium">{formatBRL(somaTotal)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Esperado</span>

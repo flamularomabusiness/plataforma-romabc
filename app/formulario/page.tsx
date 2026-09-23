@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,9 +10,9 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { useCriarContrato } from "@/lib/queries";
+import { useCriarContrato, uploadContratoDocumento } from "@/lib/queries";
 import type { NovoContratoPayload } from "@/lib/types";
-import { redirectPathAfterFormulario } from "@/lib/auth";
+import { getUserId, redirectPathAfterFormulario } from "@/lib/auth";
 
 import {
   RASCUNHO_KEY,
@@ -26,6 +26,7 @@ import { SecaoEmpresaCliente } from "@/components/formulario/secao-empresa-clien
 import { SecaoPessoaCliente } from "@/components/formulario/secao-pessoa-cliente";
 import { SecaoPagamento } from "@/components/formulario/secao-pagamento";
 import { SecaoConsultora } from "@/components/formulario/secao-consultora";
+import { SecaoDocumentos } from "@/components/formulario/secao-documentos";
 
 const SECOES_FINAIS = [
   { titulo: "Pagamento", Componente: SecaoPagamento },
@@ -35,6 +36,8 @@ const SECOES_FINAIS = [
 export default function FormularioPage() {
   const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [arquivosEmpresa, setArquivosEmpresa] = useState<File[]>([]);
+  const [arquivosCliente, setArquivosCliente] = useState<File[]>([]);
 
   const form = useForm<FormularioContratoValues>({
     resolver: zodResolver(formularioContratoSchema),
@@ -116,18 +119,25 @@ export default function FormularioPage() {
           data_inicio_primeiro_pagamento: values.data_inicio_primeiro_pagamento,
           valor_primeiro_pagamento: values.valor_primeiro_pagamento ?? null,
           data_vencimento_mensal: values.data_vencimento_mensal,
+          forma_pagamento: values.forma_pagamento_padrao,
         }),
         ...(values.tipo_pagamento === "venda_unica" && {
           valor_total: values.valor_total,
           data_pagamento_unico: values.data_pagamento_unico,
+          forma_pagamento: values.forma_pagamento_padrao,
         }),
         ...(values.tipo_pagamento === "parcelado" && {
           valor_total: values.valor_total,
-          valor_entrada: values.valor_entrada,
-          data_entrada: values.data_entrada,
           numero_parcelas: values.numero_parcelas,
           parcelas: values.parcelas,
         }),
+        ...(values.tem_entrada &&
+          values.tipo_entrada && {
+            entrada: {
+              tipo: values.tipo_entrada,
+              parcelas: values.entrada_parcelas ?? [],
+            },
+          }),
         data_inicio_consultoria: values.data_inicio_consultoria || null,
         data_onboarding: values.data_onboarding || null,
       },
@@ -138,13 +148,49 @@ export default function FormularioPage() {
     };
 
     try {
-      await criarContrato.mutateAsync(payload);
+      const resultado = await criarContrato.mutateAsync(payload);
       toast.success("Contrato criado com sucesso!");
+
+      await enviarDocumentosPendentes(resultado?.contrato_id);
+
       window.localStorage.removeItem(RASCUNHO_KEY);
+      setArquivosEmpresa([]);
+      setArquivosCliente([]);
       form.reset(valoresPadrao);
       router.push(redirectPathAfterFormulario());
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao criar contrato");
+    }
+  }
+
+  // O contrato só existe depois de criarContrato() retornar — os arquivos
+  // ficam em memória até aqui (ver components/formulario/secao-documentos.tsx).
+  // Falha de upload NÃO desfaz o contrato (já foi criado com sucesso): só
+  // avisa quais arquivos falharam, pra anexar depois pela tela do cliente.
+  async function enviarDocumentosPendentes(contratoId: string | undefined) {
+    if (!contratoId) return;
+    const uploadedBy = getUserId();
+    if (!uploadedBy) return;
+
+    const pendentes = [
+      ...arquivosEmpresa.map((file) => ({ file, tipo: "empresa" as const })),
+      ...arquivosCliente.map((file) => ({ file, tipo: "cliente" as const })),
+    ];
+    if (pendentes.length === 0) return;
+
+    const falhas: string[] = [];
+    for (const { file, tipo } of pendentes) {
+      try {
+        await uploadContratoDocumento({ contratoId, tipo, file, uploadedBy });
+      } catch {
+        falhas.push(file.name);
+      }
+    }
+
+    if (falhas.length > 0) {
+      toast.warning(
+        `Contrato criado, mas ${falhas.length} documento(s) não foram enviados: ${falhas.join(", ")}. Anexe novamente pela tela do cliente.`
+      );
     }
   }
 
@@ -201,6 +247,20 @@ export default function FormularioPage() {
                 </CardContent>
               </Card>
             ))}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Documentos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SecaoDocumentos
+                  arquivosEmpresa={arquivosEmpresa}
+                  arquivosCliente={arquivosCliente}
+                  onChangeArquivosEmpresa={setArquivosEmpresa}
+                  onChangeArquivosCliente={setArquivosCliente}
+                />
+              </CardContent>
+            </Card>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex gap-2">

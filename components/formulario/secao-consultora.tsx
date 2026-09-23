@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useFormContext } from "react-hook-form";
 
 import {
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConsultoras } from "@/lib/queries";
+import { filtrarConsultorasPorProduto } from "@/lib/status-helper";
 import { cn } from "@/lib/utils";
 import { GRAUS_DIFICULDADE, type GrauDificuldade } from "@/lib/types";
 import type { FormularioContratoValues } from "./form-schema";
@@ -62,6 +64,20 @@ O Que Espera da ROMA BC:
 export function SecaoConsultora() {
   const form = useFormContext<FormularioContratoValues>();
   const { data: consultoras, isLoading } = useConsultoras();
+  const produtoId = form.watch("produto_id");
+  const consultorasFiltradas = filtrarConsultorasPorProduto(consultoras ?? [], produtoId);
+
+  // Trocar de produto pode tirar a consultora escolhida da lista filtrada —
+  // ignora o mount inicial pra não apagar uma escolha restaurada do rascunho.
+  const produtoIdMontagem = useRef(produtoId);
+  useEffect(() => {
+    if (produtoId === produtoIdMontagem.current) return;
+    const consultoraIdAtual = form.getValues("consultora_id");
+    if (consultoraIdAtual && !consultorasFiltradas.some((c) => c.id === consultoraIdAtual)) {
+      form.setValue("consultora_id", "", { shouldValidate: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [produtoId, consultorasFiltradas]);
 
   return (
     <div className="grid gap-6">
@@ -81,7 +97,7 @@ export function SecaoConsultora() {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {(consultoras ?? []).map((consultora) => (
+                  {consultorasFiltradas.map((consultora) => (
                     <SelectItem key={consultora.id} value={consultora.id}>
                       {consultora.especialidade
                         ? `${consultora.nome} (${consultora.especialidade})`

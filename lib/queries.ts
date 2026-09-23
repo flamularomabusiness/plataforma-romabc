@@ -14,11 +14,13 @@ import {
   ClienteDetalhes,
   ClienteFiltros,
   Consultora,
+  ContratoDocumento,
   PagamentoProjetado,
   DashboardKPIsCompleto,
   DashboardKPIsFiltros,
   DashboardMesKPIs,
   DashboardUneKPIs,
+  FormaPagamento,
   GRAUS_DIFICULDADE,
   GrauDificuldade,
   FuncaoPessoa,
@@ -36,12 +38,14 @@ import {
   ParcelaClienteDetalhe,
   PessoaCliente,
   Produto,
+  ProdutoPlano,
   ReceitaMensal,
   RegistroImportacao,
   StatusCliente,
   StatusContrato,
   StatusPagamento,
   TipoContratoFiltro,
+  TipoDocumento,
   TipoPagamento,
   Une,
 } from "./types";
@@ -95,6 +99,22 @@ export async function fetchProdutos(uneId?: string): Promise<Produto[]> {
       throw new Error(error.message);
     }
     return (data ?? []) as Produto[];
+  });
+}
+
+export async function fetchProdutoPlanos(produtoId: string): Promise<ProdutoPlano[]> {
+  return medirTempo(`Tempo para carregar planos (produto=${produtoId})`, async () => {
+    const { data, error } = await supabase
+      .from("produto_planos")
+      .select("*")
+      .eq("produto_id", produtoId)
+      .eq("ativo", true)
+      .order("nome", { ascending: true });
+    if (error) {
+      console.error("[fetchProdutoPlanos] erro do Supabase:", error);
+      throw new Error(error.message);
+    }
+    return (data ?? []) as ProdutoPlano[];
   });
 }
 
@@ -667,6 +687,7 @@ export interface AtualizarPagamentoPayload {
   status?: StatusPagamento;
   data_pagamento_real?: string | null;
   data_vencimento?: string;
+  forma_pagamento?: FormaPagamento;
 }
 
 export async function atualizarPagamento(id: string, payload: AtualizarPagamentoPayload) {
@@ -957,6 +978,14 @@ export function useProdutos(uneId?: string) {
   });
 }
 
+export function useProdutoPlanos(produtoId: string | undefined) {
+  return useQuery({
+    queryKey: ["produto-planos", produtoId ?? null],
+    queryFn: () => fetchProdutoPlanos(produtoId as string),
+    enabled: !!produtoId,
+  });
+}
+
 export function useConsultoras() {
   return useQuery({ queryKey: ["consultoras"], queryFn: fetchConsultoras });
 }
@@ -1212,6 +1241,149 @@ export function useAtualizarPessoa(clienteId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cliente", clienteId] });
       queryClient.invalidateQueries({ queryKey: ["clientes"] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Documentos do Contrato — Storage privado (supabase/migration_contrato_documentos.sql).
+// ---------------------------------------------------------------------------
+
+const DOCUMENTO_TAMANHO_MAX_BYTES = 10 * 1024 * 1024; // 10MB — mesmo limite do bucket
+const DOCUMENTO_BUCKET = "contrato-documentos";
+/** Espelha allowed_mime_types do bucket — validar aqui só dá erro cedo, o bucket já reforça de verdade. */
+const DOCUMENTO_TIPOS_ACEITOS: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+};
+
+export function validarArquivoDocumento(file: File): string | null {
+  const extensao = `.${file.name.split(".").pop()?.toLowerCase() ?? ""}`;
+  if (!DOCUMENTO_TIPOS_ACEITOS[extensao]) {
+    return "Formato inválido. Envie .pdf, .doc, .docx, .xls, .xlsx, .jpg ou .png.";
+  }
+  if (file.size > DOCUMENTO_TAMANHO_MAX_BYTES) {
+    return "Arquivo muito grande. Tamanho máximo: 10MB.";
+  }
+  return null;
+}
+
+export async function fetchContratoDocumentos(contratoId: string): Promise<ContratoDocumento[]> {
+  const { data, error } = await supabase
+    .from("contrato_documentos")
+    .select("*")
+    .eq("contrato_id", contratoId)
+    .order("data_criacao", { ascending: false });
+  if (error) {
+    console.error("[fetchContratoDocumentos] erro do Supabase:", error);
+    throw new Error(error.message);
+  }
+  return (data ?? []) as ContratoDocumento[];
+}
+
+export async function uploadContratoDocumento({
+  contratoId,
+  tipo,
+  file,
+  uploadedBy,
+}: {
+  contratoId: string;
+  tipo: TipoDocumento;
+  file: File;
+  uploadedBy: string;
+}): Promise<ContratoDocumento> {
+  const erroValidacao = validarArquivoDocumento(file);
+  if (erroValidacao) throw new Error(erroValidacao);
+
+  const caminho = `contratos/${contratoId}/${crypto.randomUUID()}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from(DOCUMENTO_BUCKET).upload(caminho, file);
+  if (uploadError) {
+    console.error("[uploadContratoDocumento] erro no upload:", uploadError);
+    throw new Error(uploadError.message);
+  }
+
+  const { data, error } = await supabase
+    .from("contrato_documentos")
+    .insert({
+      contrato_id: contratoId,
+      tipo,
+      nome_arquivo: file.name,
+      caminho_storage: caminho,
+      tamanho_bytes: file.size,
+      uploaded_by: uploadedBy,
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error("[uploadContratoDocumento] erro ao gravar metadados:", error);
+    // Arquivo já subiu pro Storage mas o registro falhou — remove pra não
+    // deixar um objeto órfão sem linha nenhuma apontando pra ele.
+    await supabase.storage.from(DOCUMENTO_BUCKET).remove([caminho]);
+    throw new Error(error.message);
+  }
+
+  return data as ContratoDocumento;
+}
+
+/** URL de download temporária (60s) — bucket é privado, não tem URL pública. */
+export async function getContratoDocumentoUrl(caminhoStorage: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from(DOCUMENTO_BUCKET)
+    .createSignedUrl(caminhoStorage, 60);
+  if (error) {
+    console.error("[getContratoDocumentoUrl] erro ao gerar URL:", error);
+    throw new Error(error.message);
+  }
+  return data.signedUrl;
+}
+
+export async function deleteContratoDocumento(id: string, caminhoStorage: string): Promise<void> {
+  const { error: storageError } = await supabase.storage.from(DOCUMENTO_BUCKET).remove([caminhoStorage]);
+  if (storageError) {
+    console.error("[deleteContratoDocumento] erro ao remover do Storage:", storageError);
+    throw new Error(storageError.message);
+  }
+
+  const { error } = await supabase.from("contrato_documentos").delete().eq("id", id);
+  if (error) {
+    console.error("[deleteContratoDocumento] erro ao remover metadados:", error);
+    throw new Error(error.message);
+  }
+}
+
+export function useContratoDocumentos(contratoId: string | undefined) {
+  return useQuery({
+    queryKey: ["contrato-documentos", contratoId ?? null],
+    queryFn: () => fetchContratoDocumentos(contratoId as string),
+    enabled: !!contratoId,
+  });
+}
+
+export function useUploadContratoDocumento(contratoId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { tipo: TipoDocumento; file: File; uploadedBy: string }) =>
+      uploadContratoDocumento({ contratoId, ...payload }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contrato-documentos", contratoId] });
+    },
+  });
+}
+
+export function useDeleteContratoDocumento(contratoId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, caminhoStorage }: { id: string; caminhoStorage: string }) =>
+      deleteContratoDocumento(id, caminhoStorage),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contrato-documentos", contratoId] });
     },
   });
 }
