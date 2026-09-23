@@ -68,29 +68,46 @@ end $$;
 
 -- Nome correto do produto de consultoria financeira na UNE YMPULS 46 é
 -- "CONSULTORIA GREEN+", não "CONSULTORIA FINANCEIRA" (esse nome é só pra
--- Roma 20, bloco acima). Se uma execução anterior desta migration já criou
--- o produto com o nome errado (antes desta correção), RENOMEIA em vez de
--- criar um produto duplicado — preserva o id e os planos já vinculados.
+-- Roma 20, bloco acima). produtos tem um índice único em (une_id, nome)
+-- criado direto no Supabase Studio (não existe em nenhuma migration
+-- rastreada) — então NÃO dá pra só "UPDATE ... SET nome" se as duas linhas
+-- (a antiga 'CONSULTORIA FINANCEIRA' e uma 'CONSULTORIA GREEN+' já criada
+-- por uma execução anterior desta migration, de antes da correção do nome
+-- da UNE) chegarem a existir ao mesmo tempo — bateria nesse índice único
+-- (erro real encontrado rodando isto em produção). Em vez de apagar às
+-- cegas (arriscado: contratos.produto_id pode referenciar a linha antiga),
+-- faz um merge seguro: reaponta qualquer contrato da linha antiga pra
+-- GREEN+ antes de apagar a duplicata — produto_planos da linha antiga já
+-- cai sozinho (on delete cascade), sem precisar reapontar também.
 do $$
 declare
   v_une_id uuid;
   v_produto_id uuid;
+  v_produto_antigo_id uuid;
 begin
   select id into v_une_id from unes where nome ilike 'YMPULS 46';
   if v_une_id is null then
     raise exception 'UNE "YMPULS 46" não encontrada — confira o nome real em unes.nome antes de rodar esta migration';
   end if;
 
-  select id into v_produto_id from produtos where une_id = v_une_id and upper(nome) = 'CONSULTORIA FINANCEIRA';
-  if v_produto_id is not null then
-    update produtos set nome = 'CONSULTORIA GREEN+' where id = v_produto_id;
-  else
-    select id into v_produto_id from produtos where une_id = v_une_id and upper(nome) = 'CONSULTORIA GREEN+';
-    if v_produto_id is null then
-      insert into produtos (une_id, nome, ativo) values (v_une_id, 'CONSULTORIA GREEN+', true)
-      returning id into v_produto_id;
-    end if;
+  select id into v_produto_id from produtos where une_id = v_une_id and upper(nome) = 'CONSULTORIA GREEN+';
+  select id into v_produto_antigo_id from produtos where une_id = v_une_id and upper(nome) = 'CONSULTORIA FINANCEIRA';
+
+  if v_produto_id is null and v_produto_antigo_id is not null then
+    -- Só a linha antiga existe: caminho normal, renomeia.
+    update produtos set nome = 'CONSULTORIA GREEN+' where id = v_produto_antigo_id;
+    v_produto_id := v_produto_antigo_id;
+  elsif v_produto_id is not null and v_produto_antigo_id is not null then
+    -- As duas existem — merge: contratos da antiga passam a apontar pra
+    -- GREEN+, depois apaga a duplicata.
+    update contratos set produto_id = v_produto_id where produto_id = v_produto_antigo_id;
+    delete from produtos where id = v_produto_antigo_id;
+  elsif v_produto_id is null and v_produto_antigo_id is null then
+    -- Nenhuma existe ainda: cria direto com o nome certo.
+    insert into produtos (une_id, nome, ativo) values (v_une_id, 'CONSULTORIA GREEN+', true)
+    returning id into v_produto_id;
   end if;
+  -- (se só GREEN+ já existir, v_produto_id já está certo — nada a fazer)
 
   insert into produto_planos (produto_id, nome)
   select v_produto_id, nome from (values ('START'), ('FORTALECER'), ('PERFORMAR')) as p(nome)
