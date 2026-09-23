@@ -116,8 +116,10 @@ export default function FormularioPage() {
         plano_contratado: values.plano_contratado,
         ...(values.tipo_pagamento === "recorrente" && {
           valor_mensal: values.valor_mensal,
-          data_inicio_primeiro_pagamento: values.data_inicio_primeiro_pagamento,
-          valor_primeiro_pagamento: values.valor_primeiro_pagamento ?? null,
+          // Não existe mais um campo separado "Data do 1º Pagamento" — Data
+          // Início do Contrato é o próprio ponto de partida do cronograma
+          // mensal (evita duas perguntas pra essencialmente a mesma data).
+          data_inicio_primeiro_pagamento: values.data_inicio_consultoria,
           data_vencimento_mensal: values.data_vencimento_mensal,
           forma_pagamento: values.forma_pagamento_padrao,
         }),

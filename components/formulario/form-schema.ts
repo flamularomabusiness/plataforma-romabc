@@ -76,8 +76,6 @@ export const formularioContratoSchema = z
 
     // Recorrente
     valor_mensal: z.number().nonnegative("Informe um valor válido").optional(),
-    data_inicio_primeiro_pagamento: z.string().optional().or(z.literal("")),
-    valor_primeiro_pagamento: z.number().nonnegative().optional().nullable(),
     data_vencimento_mensal: z
       .number({ invalid_type_error: "Informe o dia de vencimento" })
       .int()
@@ -134,11 +132,11 @@ export const formularioContratoSchema = z
           path: ["valor_mensal"],
         });
       }
-      if (!data.data_inicio_primeiro_pagamento) {
+      if (!data.data_inicio_consultoria) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Informe a data do 1º pagamento",
-          path: ["data_inicio_primeiro_pagamento"],
+          message: "Informe a Data Início do Contrato",
+          path: ["data_inicio_consultoria"],
         });
       }
       if (!data.data_vencimento_mensal) {
@@ -290,8 +288,6 @@ export const valoresPadrao: FormularioContratoValues = {
   tipo_pagamento: "recorrente",
   plano_contratado: "",
   valor_mensal: 0,
-  data_inicio_primeiro_pagamento: "",
-  valor_primeiro_pagamento: null,
   data_vencimento_mensal: 5,
   data_pagamento_unico: "",
   valor_total: 0,

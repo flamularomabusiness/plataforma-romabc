@@ -95,7 +95,7 @@ const novoContratoPayloadSchema = z.object({
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe o valor do contrato", path: ["valor_mensal"] });
         }
         if (!pagamento.data_inicio_primeiro_pagamento) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe a data do 1º pagamento", path: ["data_inicio_primeiro_pagamento"] });
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe a Data Início do Contrato", path: ["data_inicio_consultoria"] });
         }
         if (!pagamento.data_vencimento_mensal) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe o dia de vencimento", path: ["data_vencimento_mensal"] });

@@ -40,19 +40,8 @@ const FORMA_PAGAMENTO_LABELS: Record<FormaPagamento, string> = {
 export function SecaoPagamento() {
   const form = useFormContext<FormularioContratoValues>();
   const tipoPagamento = form.watch("tipo_pagamento");
-  const valorMensal = form.watch("valor_mensal");
-  const valorPrimeiroPagamento = form.watch("valor_primeiro_pagamento");
   const produtoId = form.watch("produto_id");
   const { data: planos, isLoading: loadingPlanos } = useProdutoPlanos(produtoId);
-
-  useEffect(() => {
-    if (valorPrimeiroPagamento === null || valorPrimeiroPagamento === undefined) {
-      form.setValue("valor_primeiro_pagamento", valorMensal || null, {
-        shouldValidate: false,
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [valorMensal]);
 
   // Trocar de produto invalida o plano escolhido (planos são por produto) —
   // ignora o mount inicial pra não apagar um plano restaurado do rascunho.
@@ -140,42 +129,6 @@ export function SecaoPagamento() {
                     <Input
                       placeholder="R$ 0,00"
                       value={field.value ? formatCurrencyInput(field.value) : ""}
-                      onChange={(e) => field.onChange(maskCurrencyToNumber(e.target.value))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="data_inicio_primeiro_pagamento"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Data do 1º Pagamento *</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="valor_primeiro_pagamento"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Valor do 1º Pagamento</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="R$ 0,00"
-                      value={
-                        field.value === null || field.value === undefined
-                          ? ""
-                          : formatCurrencyInput(field.value)
-                      }
                       onChange={(e) => field.onChange(maskCurrencyToNumber(e.target.value))}
                     />
                   </FormControl>
@@ -297,7 +250,7 @@ export function SecaoPagamento() {
           name="data_inicio_consultoria"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Data Início do Contrato</FormLabel>
+              <FormLabel>Data Início do Contrato{tipoPagamento === "recorrente" ? " *" : ""}</FormLabel>
               <FormControl>
                 <Input type="date" {...field} />
               </FormControl>

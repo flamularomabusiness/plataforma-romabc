@@ -66,6 +66,11 @@ begin
   on conflict (produto_id, nome) do nothing;
 end $$;
 
+-- Nome correto do produto de consultoria financeira na UNE YMPULS 46 é
+-- "CONSULTORIA GREEN+", não "CONSULTORIA FINANCEIRA" (esse nome é só pra
+-- Roma 20, bloco acima). Se uma execução anterior desta migration já criou
+-- o produto com o nome errado (antes desta correção), RENOMEIA em vez de
+-- criar um produto duplicado — preserva o id e os planos já vinculados.
 do $$
 declare
   v_une_id uuid;
@@ -77,9 +82,14 @@ begin
   end if;
 
   select id into v_produto_id from produtos where une_id = v_une_id and upper(nome) = 'CONSULTORIA FINANCEIRA';
-  if v_produto_id is null then
-    insert into produtos (une_id, nome, ativo) values (v_une_id, 'CONSULTORIA FINANCEIRA', true)
-    returning id into v_produto_id;
+  if v_produto_id is not null then
+    update produtos set nome = 'CONSULTORIA GREEN+' where id = v_produto_id;
+  else
+    select id into v_produto_id from produtos where une_id = v_une_id and upper(nome) = 'CONSULTORIA GREEN+';
+    if v_produto_id is null then
+      insert into produtos (une_id, nome, ativo) values (v_une_id, 'CONSULTORIA GREEN+', true)
+      returning id into v_produto_id;
+    end if;
   end if;
 
   insert into produto_planos (produto_id, nome)
