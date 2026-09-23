@@ -166,8 +166,14 @@ end $$;
 
 alter table consultoras add column if not exists produtos uuid[] not null default '{}';
 
+-- Quem atende CONSULTORIA FINANCEIRA (Roma 20) também atende CONSULTORIA
+-- GREEN+ (Ympuls 46) — mesmo produto de consultoria financeira, só com nome
+-- diferente por UNE.
 update consultoras
-set produtos = (select coalesce(array_agg(id), '{}') from produtos where upper(nome) = 'CONSULTORIA FINANCEIRA')
+set produtos = (
+  select coalesce(array_agg(id), '{}') from produtos
+  where upper(nome) in ('CONSULTORIA FINANCEIRA', 'CONSULTORIA GREEN+')
+)
 where nome in ('Rosane Mello', 'Tainara Muller', 'Elisa');
 
 update consultoras
