@@ -672,6 +672,8 @@ export interface AtualizarContratoPayload {
   grau_dificuldade?: GrauDificuldade;
   status?: StatusContrato;
   numero_empresas?: number;
+  /** Só informativo — não recalcula pagamentos_projetados (já gerados na criação do contrato). */
+  data_inicio_consultoria?: string | null;
 }
 
 export async function atualizarContrato(id: string, payload: AtualizarContratoPayload) {

@@ -25,6 +25,7 @@ import {
 import { useAtualizarContrato, type AtualizarContratoPayload } from "@/lib/queries";
 import {
   formatBRL,
+  formatDate,
   getGrauDificuldadeBadgeVariant,
   GRAU_DIFICULDADE_LABELS,
 } from "@/lib/utils";
@@ -79,12 +80,14 @@ export function TabelaContratosEditavel({
             grau_dificuldade: contrato.grau_dificuldade,
             status: contrato.status,
             numero_empresas: contrato.numero_empresas,
+            data_inicio_consultoria: contrato.data_inicio_consultoria,
           }
         : {
             valor_total: contrato.valor_total ?? undefined,
             grau_dificuldade: contrato.grau_dificuldade,
             status: contrato.status,
             numero_empresas: contrato.numero_empresas,
+            data_inicio_consultoria: contrato.data_inicio_consultoria,
           }
     );
   }
@@ -145,6 +148,7 @@ export function TabelaContratosEditavel({
           <TableHead>Tipo</TableHead>
           <TableHead>Valor</TableHead>
           <TableHead>Dia Vencimento</TableHead>
+          <TableHead>Data Início</TableHead>
           <TableHead>Grau de Dificuldade</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Nº Empresas</TableHead>
@@ -154,7 +158,7 @@ export function TabelaContratosEditavel({
       <TableBody>
         {contratos.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={8} className="text-center text-muted-foreground">
+            <TableCell colSpan={9} className="text-center text-muted-foreground">
               Nenhum contrato cadastrado.
             </TableCell>
           </TableRow>
@@ -222,6 +226,21 @@ export function TabelaContratosEditavel({
                     />
                   ) : (
                     contrato.data_vencimento_mensal
+                  )}
+                </TableCell>
+
+                <TableCell>
+                  {emEdicao ? (
+                    <Input
+                      type="date"
+                      className="w-36"
+                      value={form.data_inicio_consultoria ?? ""}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, data_inicio_consultoria: e.target.value }))
+                      }
+                    />
+                  ) : (
+                    formatDate(contrato.data_inicio_consultoria)
                   )}
                 </TableCell>
 
