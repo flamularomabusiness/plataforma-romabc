@@ -22,7 +22,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAtualizarContrato, type AtualizarContratoPayload } from "@/lib/queries";
+import { useAtualizarContrato, useConsultoras, type AtualizarContratoPayload } from "@/lib/queries";
+import { filtrarConsultorasPorProduto } from "@/lib/status-helper";
 import {
   formatBRL,
   formatDate,
@@ -69,6 +70,7 @@ export function TabelaContratosEditavel({
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<AtualizarContratoPayload>({});
   const atualizar = useAtualizarContrato(clienteId);
+  const { data: consultoras } = useConsultoras();
 
   function iniciarEdicao(contrato: Contrato) {
     setEditId(contrato.id);
@@ -81,6 +83,7 @@ export function TabelaContratosEditavel({
             status: contrato.status,
             numero_empresas: contrato.numero_empresas,
             data_inicio_consultoria: contrato.data_inicio_consultoria,
+            consultora_id: contrato.consultora_id,
           }
         : {
             valor_total: contrato.valor_total ?? undefined,
@@ -88,6 +91,7 @@ export function TabelaContratosEditavel({
             status: contrato.status,
             numero_empresas: contrato.numero_empresas,
             data_inicio_consultoria: contrato.data_inicio_consultoria,
+            consultora_id: contrato.consultora_id,
           }
     );
   }
@@ -116,6 +120,10 @@ export function TabelaContratosEditavel({
     }
     if (!form.numero_empresas || form.numero_empresas < 1) {
       toast.error("Número de empresas deve ser pelo menos 1");
+      return;
+    }
+    if (!form.consultora_id) {
+      toast.error("Selecione o responsável");
       return;
     }
 
@@ -149,6 +157,7 @@ export function TabelaContratosEditavel({
           <TableHead>Valor</TableHead>
           <TableHead>Dia Vencimento</TableHead>
           <TableHead>Data Início</TableHead>
+          <TableHead>Responsável</TableHead>
           <TableHead>Grau de Dificuldade</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Nº Empresas</TableHead>
@@ -158,7 +167,7 @@ export function TabelaContratosEditavel({
       <TableBody>
         {contratos.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={9} className="text-center text-muted-foreground">
+            <TableCell colSpan={10} className="text-center text-muted-foreground">
               Nenhum contrato cadastrado.
             </TableCell>
           </TableRow>
@@ -241,6 +250,30 @@ export function TabelaContratosEditavel({
                     />
                   ) : (
                     formatDate(contrato.data_inicio_consultoria)
+                  )}
+                </TableCell>
+
+                <TableCell>
+                  {emEdicao ? (
+                    <Select
+                      value={form.consultora_id}
+                      onValueChange={(v) => setForm((f) => ({ ...f, consultora_id: v }))}
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filtrarConsultorasPorProduto(consultoras ?? [], contrato.produto_id).map(
+                          (consultora) => (
+                            <SelectItem key={consultora.id} value={consultora.id}>
+                              {consultora.nome}
+                            </SelectItem>
+                          )
+                        )}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    contrato.consultora?.nome ?? "-"
                   )}
                 </TableCell>
 

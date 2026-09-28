@@ -677,6 +677,7 @@ export interface AtualizarContratoPayload {
   /** Só informativo — não recalcula pagamentos_projetados (já gerados na criação do contrato). */
   data_inicio_consultoria?: string | null;
   contexto_perfil_cliente?: string;
+  consultora_id?: string;
 }
 
 export async function atualizarContrato(id: string, payload: AtualizarContratoPayload) {

@@ -353,6 +353,7 @@ export default function ClienteDetalhesPage() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Pagamento</TableHead>
                 <TableHead>Data Início</TableHead>
+                <TableHead>Responsável</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Grau de Dificuldade</TableHead>
               </TableRow>
@@ -360,7 +361,7 @@ export default function ClienteDetalhesPage() {
             <TableBody>
               {cliente.contratos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
                     Nenhum contrato cadastrado.
                   </TableCell>
                 </TableRow>
@@ -385,6 +386,7 @@ export default function ClienteDetalhesPage() {
                       )}
                     </TableCell>
                     <TableCell>{formatDate(contrato.data_inicio_consultoria)}</TableCell>
+                    <TableCell>{contrato.consultora?.nome ?? "-"}</TableCell>
                     <TableCell>
                       <Badge variant={STATUS_CONTRATO_VARIANT[contrato.status]}>
                         {contrato.status}
