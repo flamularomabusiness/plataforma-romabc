@@ -99,9 +99,7 @@ export function SecaoConsultora() {
                 <SelectContent>
                   {consultorasFiltradas.map((consultora) => (
                     <SelectItem key={consultora.id} value={consultora.id}>
-                      {consultora.especialidade
-                        ? `${consultora.nome} (${consultora.especialidade})`
-                        : consultora.nome}
+                      {consultora.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>

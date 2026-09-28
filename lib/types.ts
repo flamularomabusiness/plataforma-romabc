@@ -87,19 +87,18 @@ export interface ProdutoPlano {
   data_criacao: string;
 }
 
+/**
+ * Schema real de consultoras em produção (confirmado via
+ * information_schema.columns): só id, nome, email, produtos — bem mais
+ * enxuto do que migration_multiplas_empresas.sql presumia (telefone/setor/
+ * especialidade/ativo/datas nunca existiram de fato nesse banco).
+ */
 export interface Consultora {
   id: string;
   nome: string;
   email: string | null;
-  telefone: string | null;
-  setor: string | null;
-  /** Exibido no formulário como "Nome (especialidade)" — ex.: "consultoria", "CFO". */
-  especialidade: string | null;
-  ativo: boolean;
   /** Produtos que essa pessoa atende — array vazio = aparece pra qualquer produto. */
   produtos: string[];
-  data_criacao: string;
-  data_atualizacao: string;
 }
 
 export interface Cliente {

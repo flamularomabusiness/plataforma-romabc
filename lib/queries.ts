@@ -120,10 +120,12 @@ export async function fetchProdutoPlanos(produtoId: string): Promise<ProdutoPlan
 
 export async function fetchConsultoras(): Promise<Consultora[]> {
   return medirTempo("Tempo para carregar consultoras", async () => {
+    // consultoras não tem coluna "ativo" (schema real confirmado via
+    // information_schema.columns — bem mais enxuto do que o código
+    // presumia) — não há filtro de ativo/inativo aqui.
     const { data, error } = await supabase
       .from("consultoras")
       .select("*")
-      .eq("ativo", true)
       .order("nome", { ascending: true });
     if (error) {
       console.error("[fetchConsultoras] erro do Supabase:", error);
