@@ -27,6 +27,7 @@ import {
 import { StatusBadge } from "@/components/status-badge";
 import { CardEmpresasContrato } from "@/components/clientes/card-empresas-contrato";
 import { CardDocumentos } from "@/components/clientes/card-documentos";
+import { CardContextoContrato } from "@/components/clientes/card-contexto-contrato";
 import { useClienteDetalhes } from "@/lib/queries";
 import {
   cn,
@@ -400,6 +401,27 @@ export default function ClienteDetalhesPage() {
               )}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Contexto e Perfil do Cliente</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {cliente.contratos.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum contrato cadastrado.</p>
+          ) : (
+            cliente.contratos.map((contrato) => (
+              <CardContextoContrato
+                key={contrato.id}
+                contratoId={contrato.id}
+                clienteId={cliente.id}
+                produtoNome={contrato.produto?.nome ?? "Contrato"}
+                contextoAtual={contrato.contexto_perfil_cliente}
+              />
+            ))
+          )}
         </CardContent>
       </Card>
 
