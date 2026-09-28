@@ -4,81 +4,106 @@
 -- (fetchClienteDetalhes, lib/queries.ts) sempre usou o embed do PostgREST
 -- `consultora:consultoras(*)` dentro de `contratos(*, ...)` — isso só
 -- funciona se existir uma foreign key de verdade entre as duas tabelas.
--- Conferido direto no banco (pg_constraint): `contratos` só tem FK pra
--- clientes, produtos e unes — nunca existiu FK pra consultoras. O
--- PostgREST retornava "PGRST200 — Could not find a relationship between
--- 'contratos' and 'consultoras'", e a tela de detalhe quebrava com
--- "Cliente não encontrado" (a lista de clientes não usa esse embed, por
--- isso continuava funcionando normalmente).
+-- `contratos` nunca teve essa FK. O PostgREST retornava "PGRST200 — Could
+-- not find a relationship between 'contratos' and 'consultoras'", e a tela
+-- de detalhe quebrava com "Cliente não encontrado" (a lista de clientes
+-- não usa esse embed, por isso continuava funcionando normalmente).
 --
--- 3ª TENTATIVA (as 2 anteriores erraram o lado): o mismatch de tipo não é
--- em contratos.consultora_id (esse já é uuid, confirmado testando direto
--- contra o banco) — é em **consultoras.id**, a PK da tabela, que é TEXT.
--- `consultoras` é a única tabela do projeto cuja PK não é uuid de verdade
--- (produtos/unes/clientes/contratos todas são). Uma FK exige os dois lados
--- com o mesmo tipo, então esta migration converte consultoras.id pra uuid
--- primeiro — e só então adiciona a constraint.
+-- HISTÓRICO DE TENTATIVAS ANTERIORES (nenhuma tocou o banco de verdade —
+-- cada uma revelou uma peça a mais do quebra-cabeça, testando direto
+-- contra produção):
+--   1) assumi que consultora_id (em contratos) seria text — errado, já era uuid.
+--   2) assumi então que o mismatch era só isso — errado: quem é text é
+--      consultoras.id, a PK da tabela (única do projeto sem PK uuid).
+--   3) tentei converter consultoras.id sozinha — quebrou, porque JÁ EXISTE
+--      uma FK de clientes pra consultoras (clientes_consultora_id_fkey),
+--      criada fora deste repositório, e ela também é text.
+--   4) consultando pg_constraint direto em produção: consultoras.id é
+--      referenciada por TRÊS tabelas, não só clientes —
+--      clientes.consultora_id, reunioes.consultora_id e
+--      agendamentos_fixos.consultora_id (reunioes/agendamentos_fixos não
+--      fazem parte deste repositório — são de outra feature/app usando o
+--      mesmo projeto Supabase). Todas as três em text.
+--
+-- Não dá pra converter um lado (referenciado ou referenciante) por vez com
+-- a FK existente no meio — o Postgres revalida a constraint nos dois
+-- sentidos e quebra de qualquer jeito. A única forma correta: remover as 3
+-- FKs existentes, converter TODAS as colunas envolvidas (as 3 + a própria
+-- consultoras.id) na mesma transação, recriar as 3 originais do jeito que
+-- já estavam (mesmo nome, sem CASCADE — nenhuma tinha ON DELETE explícito
+-- nos resultados de pg_get_constraintdef) e só então adicionar a nova FK
+-- de contratos, que é o motivo de tudo isso.
 --
 -- Corrige adicionando a FK que sempre devia ter existido. Depois de rodar,
 -- NENHUMA mudança de código é necessária — a query já embeda consultoras
 -- certo, só faltava o banco saber que essa relação existe.
 --
--- 4ª TENTATIVA: 5 consultoras têm id fora do formato de UUID (a checagem
--- do passo 1 pegou isso e parou, como devia). Como contratos.consultora_id
--- JÁ é uuid (confirmado no erro da tentativa anterior), é estruturalmente
--- impossível qualquer contrato apontar pra um id que nem é UUID — o
--- Postgres nunca deixaria gravar esse valor numa coluna uuid. Ou seja,
--- essas 5 linhas são garantidamente órfãs (nenhum contrato as referencia),
--- seguro gerar um uuid novo pra elas em vez de só travar pedindo
--- investigação manual. Mesmo assim, a migration confirma isso de novo
--- explicitamente antes de mexer, em vez de confiar só no raciocínio.
---
--- Passos, em ordem (pra falhar cedo e com mensagem clara em vez de travar
--- no meio com um erro genérico do Postgres):
---   1) confere que nenhum contrato referencia um id fora do formato de
---      UUID (deveria ser sempre verdade, dado que consultora_id é uuid —
---      só uma dupla checagem antes de reatribuir ids);
---   2) dá um uuid novo pras consultoras com id fora do formato;
---   3) troca o tipo da coluna de text pra uuid (e reajusta o default pra
---      gen_random_uuid(), igual toda outra PK do projeto);
---   4) adiciona a FK.
---
 -- Execute no SQL Editor do Supabase. Idempotente.
 
 do $$
 declare
-  v_invalidos int;
-  v_referenciados int;
   v_tipo_atual text;
+  v_invalidos int;
+  v_pendencias text := '';
 begin
   select data_type into v_tipo_atual
   from information_schema.columns
   where table_name = 'consultoras' and column_name = 'id';
 
   if v_tipo_atual = 'text' or v_tipo_atual = 'character varying' then
+
+    -- 1) consultoras órfãs com id fora do formato de UUID — provado seguro
+    -- reatribuir (contratos.consultora_id já é uuid, não há como um
+    -- contrato apontar pra um id que nem é UUID).
     select count(*) into v_invalidos
     from consultoras
     where id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 
     if v_invalidos > 0 then
-      select count(*) into v_referenciados
-      from contratos c
-      join consultoras co on co.id = c.consultora_id::text
-      where co.id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-
-      if v_referenciados > 0 then
-        raise exception
-          'Inesperado: % contrato(s) referenciam consultora(s) com id fora do formato de UUID — pare e investigue manualmente antes de continuar (não devia ser possível, já que contratos.consultora_id é uuid).',
-          v_referenciados;
-      end if;
-
-      raise notice '% consultora(s) com id fora do formato de UUID, sem nenhum contrato referenciando — gerando id novo pra cada uma.', v_invalidos;
+      raise notice '% consultora(s) com id fora do formato de UUID — gerando id novo pra cada uma.', v_invalidos;
       update consultoras set id = gen_random_uuid()::text
       where id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
     end if;
 
+    -- 2) As 3 colunas que JÁ referenciam consultoras.id — aqui não dá pra
+    -- só regenerar (podem ser referências reais de clientes/reuniões/
+    -- agendamentos de negócio) — se algo estiver fora do formato de UUID,
+    -- para com uma lista clara em vez de adivinhar.
+    if exists (select 1 from clientes where consultora_id is not null and consultora_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') then
+      v_pendencias := v_pendencias || 'clientes.consultora_id; ';
+    end if;
+    if exists (select 1 from reunioes where consultora_id is not null and consultora_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') then
+      v_pendencias := v_pendencias || 'reunioes.consultora_id; ';
+    end if;
+    if exists (select 1 from agendamentos_fixos where consultora_id is not null and consultora_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') then
+      v_pendencias := v_pendencias || 'agendamentos_fixos.consultora_id; ';
+    end if;
+
+    if v_pendencias <> '' then
+      raise exception
+        'Existem valores fora do formato de UUID em: %. Corrija manualmente antes de rodar esta migration de novo (não são consultoras órfãs — podem ser referências reais de negócio).',
+        v_pendencias;
+    end if;
+
+    -- 3) Remove as 3 FKs existentes (senão a conversão de tipo quebra dos
+    -- dois lados), converte tudo pra uuid, recria exatamente como estavam.
+    alter table clientes drop constraint clientes_consultora_id_fkey;
+    alter table reunioes drop constraint reunioes_consultora_id_fkey;
+    alter table agendamentos_fixos drop constraint agendamentos_fixos_consultora_id_fkey;
+
     alter table consultoras alter column id type uuid using id::uuid;
     alter table consultoras alter column id set default gen_random_uuid();
+
+    alter table clientes alter column consultora_id type uuid using consultora_id::uuid;
+    alter table reunioes alter column consultora_id type uuid using consultora_id::uuid;
+    alter table agendamentos_fixos alter column consultora_id type uuid using consultora_id::uuid;
+
+    alter table clientes add constraint clientes_consultora_id_fkey
+      foreign key (consultora_id) references consultoras (id);
+    alter table reunioes add constraint reunioes_consultora_id_fkey
+      foreign key (consultora_id) references consultoras (id);
+    alter table agendamentos_fixos add constraint agendamentos_fixos_consultora_id_fkey
+      foreign key (consultora_id) references consultoras (id);
   end if;
 
   if not exists (
@@ -92,7 +117,9 @@ begin
 end $$;
 
 -- Confira depois de rodar:
---   select data_type from information_schema.columns where table_name = 'consultoras' and column_name = 'id';
--- Deve aparecer 'uuid'.
---   select conname, pg_get_constraintdef(oid) from pg_constraint where conrelid = 'contratos'::regclass and contype = 'f';
--- Deve aparecer contratos_consultora_id_fkey na lista, junto das outras 3.
+--   select conname, tabela_referenciando, definicao from (
+--     select con.conname, cl.relname as tabela_referenciando, pg_get_constraintdef(con.oid) as definicao
+--     from pg_constraint con join pg_class cl on cl.oid = con.conrelid
+--     where con.confrelid = 'consultoras'::regclass or con.conname = 'contratos_consultora_id_fkey'
+--   ) t;
+-- Deve aparecer 4 linhas: clientes, reunioes, agendamentos_fixos e contratos, todas uuid.
