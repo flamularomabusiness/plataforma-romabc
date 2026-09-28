@@ -106,6 +106,18 @@ begin
       foreign key (consultora_id) references consultoras (id);
   end if;
 
+  -- Único contrato órfão encontrado testando contra produção (id fixo,
+  -- achado via diagnóstico manual): "IMPERE CONSULTORIA E EXPANSAO DE
+  -- NEGOCIOS LTDA", produto CFO MENTORIA (Roma 35) — apontava pra uma
+  -- consultora apagada do banco. Confirmado com o usuário: reatribuir pra
+  -- Rosane Machado (CFO). Produto não é de consultoria financeira, então
+  -- não precisa entrar no array consultoras.produtos (esse filtro é só
+  -- pros produtos de consultoria).
+  update contratos
+  set consultora_id = (select id from consultoras where nome = 'Rosane Machado')
+  where id = 'fd0227f3-771b-4020-8324-884d2e2eb414'
+    and not exists (select 1 from consultoras where id = contratos.consultora_id);
+
   if not exists (
     select 1 from pg_constraint where conname = 'contratos_consultora_id_fkey'
   ) then
