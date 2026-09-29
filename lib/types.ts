@@ -486,9 +486,17 @@ export interface DashboardKPIsCompleto {
   por_une: DashboardUneKPIs[];
 }
 
+/**
+ * "nenhum" = janela rolante de quantidadeMeses (comportamento de sempre);
+ * os outros 3 = ano civil completo (Jan-Dez) do ano relativo ao atual —
+ * substituiu o antigo booleano anoVigente (só sabia fazer "ano corrente").
+ */
+export const OPCOES_ANO_CIVIL = ["nenhum", "anterior", "vigente", "proximo"] as const;
+export type AnoCivil = (typeof OPCOES_ANO_CIVIL)[number];
+
 export interface DashboardKPIsFiltros {
   quantidadeMeses: number;
-  anoVigente: boolean;
+  anoCivil: AnoCivil;
   apenasProjetado: boolean;
   tipoPagamento: TipoContratoFiltro;
 }

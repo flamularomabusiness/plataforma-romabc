@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-const JOB_NOME = "atualizar-pagamentos-projetados";
+const JOB_ATUALIZAR = "atualizar-pagamentos-projetados";
+const JOB_ESTENDER = "estender-cronograma-recorrente";
 
 // Vercel Cron injeta automaticamente o header
 // `Authorization: Bearer ${CRON_SECRET}` nas chamadas que ele mesmo dispara —
@@ -14,48 +15,64 @@ function autorizado(request: NextRequest): boolean {
   return request.headers.get("authorization") === `Bearer ${secret}`;
 }
 
+/**
+ * Roda uma RPC que retorna um `integer` (contagem) e loga o resultado em
+ * cron_logs sob o job_nome dado — usado pelos dois jobs abaixo, que são
+ * independentes entre si (um falhar não deve impedir o outro de rodar).
+ */
+async function rodarJob(jobNome: string, rpcNome: string) {
+  console.log(`[${jobNome}] iniciado`);
+
+  const { data: quantidade, error } = await supabase.rpc(rpcNome);
+
+  if (error) {
+    console.error(`[${jobNome}] erro:`, error);
+    await supabase.from("cron_logs").insert({
+      job_nome: jobNome,
+      quantidade_atualizada: 0,
+      status: "ERRO",
+      detalhes: { erro: error.message },
+    });
+    return { ok: false as const, error: error.message };
+  }
+
+  console.log(`[${jobNome}] concluído — quantidade: ${quantidade}`);
+  await supabase.from("cron_logs").insert({
+    job_nome: jobNome,
+    quantidade_atualizada: quantidade ?? 0,
+    status: "SUCESSO",
+  });
+  return { ok: true as const, quantidade: (quantidade as number) ?? 0 };
+}
+
 export async function GET(request: NextRequest) {
   if (!autorizado(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  console.log(`[${JOB_NOME}] iniciado`);
-
-  const { data: quantidadeAtualizada, error } = await supabase.rpc(
-    "atualizar_pagamentos_vencidos"
-  );
-
-  if (error) {
-    console.error(`[${JOB_NOME}] erro:`, error);
-    await supabase.from("cron_logs").insert({
-      job_nome: JOB_NOME,
-      quantidade_atualizada: 0,
-      status: "ERRO",
-      detalhes: { erro: error.message },
-    });
-    return NextResponse.json(
-      { error: "Erro ao atualizar pagamentos", details: error.message },
-      { status: 500 }
-    );
-  }
-
-  console.log(`[${JOB_NOME}] ${quantidadeAtualizada} pagamento(s) atualizado(s) de PROJETADO para PAGO`);
-
-  await supabase.from("cron_logs").insert({
-    job_nome: JOB_NOME,
-    quantidade_atualizada: quantidadeAtualizada ?? 0,
-    status: "SUCESSO",
-  });
+  // Independentes de propósito: um bug na extensão do cronograma recorrente
+  // não deve impedir a atualização de status (e vice-versa) — cada um loga
+  // o próprio resultado em cron_logs.
+  const [atualizarPagamentos, estenderCronograma] = await Promise.all([
+    rodarJob(JOB_ATUALIZAR, "atualizar_pagamentos_vencidos"),
+    rodarJob(JOB_ESTENDER, "estender_cronograma_recorrente"),
+  ]);
 
   // Cache do dashboard (KPIs, mês a mês) é 100% client-side via React Query,
   // sem cache de servidor Next.js (sem fetch cacheado nem unstable_cache) —
   // não há nada pra invalidar aqui. O próximo carregamento de página já
   // busca os dados atualizados direto do Supabase.
 
-  console.log(`[${JOB_NOME}] concluído com sucesso`);
+  const algumErro = !atualizarPagamentos.ok || !estenderCronograma.ok;
 
-  return NextResponse.json({
-    success: true,
-    atualizados: quantidadeAtualizada ?? 0,
-  });
+  return NextResponse.json(
+    {
+      success: !algumErro,
+      atualizados: atualizarPagamentos.ok ? atualizarPagamentos.quantidade : 0,
+      parcelasGeradas: estenderCronograma.ok ? estenderCronograma.quantidade : 0,
+      ...(atualizarPagamentos.ok ? {} : { erroAtualizarPagamentos: atualizarPagamentos.error }),
+      ...(estenderCronograma.ok ? {} : { erroEstenderCronograma: estenderCronograma.error }),
+    },
+    { status: algumErro ? 500 : 200 }
+  );
 }

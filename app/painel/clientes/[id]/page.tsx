@@ -51,16 +51,27 @@ const FORMA_PAGAMENTO_LABELS: Record<FormaPagamento, string> = {
   boleto: "Boleto",
 };
 
-function rotuloParcela(pagamento: PagamentoProjetado, index: number, lista: PagamentoProjetado[]): string {
+/**
+ * Recebe SEMPRE a lista completa (não filtrada) de pagamentos do cliente —
+ * o fallback "N/total" precisa da posição real da parcela dentro do
+ * cronograma inteiro do contrato, não da lista já filtrada por ano/status
+ * que está sendo exibida (senão "5/12" viraria "1/3" ao filtrar por ano).
+ */
+function rotuloParcela(pagamento: PagamentoProjetado, todosPagamentos: PagamentoProjetado[]): string {
   if (pagamento.eh_entrada) {
-    const totalEntrada = lista.filter(
-      (p) => p.eh_entrada && p.contrato_id === pagamento.contrato_id
-    ).length;
-    return totalEntrada > 1 ? `Entrada ${pagamento.numero_parcela}/${totalEntrada}` : "Entrada";
+    const doGrupo = todosPagamentos
+      .filter((p) => p.eh_entrada && p.contrato_id === pagamento.contrato_id)
+      .sort((a, b) => (a.data_vencimento ?? "").localeCompare(b.data_vencimento ?? ""));
+    return doGrupo.length > 1 ? `Entrada ${pagamento.numero_parcela}/${doGrupo.length}` : "Entrada";
   }
   if (pagamento.numero_parcela === 0) return "Entrada";
   if (pagamento.numero_parcela) return `Parcela ${pagamento.numero_parcela}`;
-  return `${index + 1}/${lista.length}`;
+
+  const doCronograma = todosPagamentos
+    .filter((p) => p.contrato_id === pagamento.contrato_id && !p.eh_entrada && !p.numero_parcela)
+    .sort((a, b) => (a.data_vencimento ?? "").localeCompare(b.data_vencimento ?? ""));
+  const idx = doCronograma.findIndex((p) => p.id === pagamento.id);
+  return `${idx + 1}/${doCronograma.length}`;
 }
 
 const STATUS_PAGAMENTO_FILTRO_LABEL: Record<StatusPagamento, string> = {
@@ -68,6 +79,15 @@ const STATUS_PAGAMENTO_FILTRO_LABEL: Record<StatusPagamento, string> = {
   PAGO: "Pagos",
   ATRASADO: "Atrasados",
   INADIMPLENTE: "Inadimplentes",
+};
+
+type FiltroAnoPagamento = "TODOS" | "anterior" | "vigente" | "proximo";
+
+const FILTRO_ANO_LABEL: Record<FiltroAnoPagamento, string> = {
+  TODOS: "Todos os anos",
+  anterior: "Ano Anterior",
+  vigente: "Ano Vigente",
+  proximo: "Próximo Ano",
 };
 
 const STATUS_CLIENTE_CARD_CLASS: Record<StatusCliente, string> = {
@@ -126,16 +146,29 @@ export default function ClienteDetalhesPage() {
   const [filtroStatusPagamento, setFiltroStatusPagamento] = useState<StatusPagamento | "TODOS">(
     "TODOS"
   );
+  const [filtroAnoPagamento, setFiltroAnoPagamento] = useState<FiltroAnoPagamento>("vigente");
   const { data: cliente, isLoading, isError } = useClienteDetalhes(params.id);
 
   const pagamentos = cliente?.pagamentos_projetados ?? [];
 
+  const anoAtual = new Date().getFullYear();
+  const anoFiltrado =
+    filtroAnoPagamento === "anterior"
+      ? anoAtual - 1
+      : filtroAnoPagamento === "proximo"
+        ? anoAtual + 1
+        : filtroAnoPagamento === "vigente"
+          ? anoAtual
+          : null; // "TODOS"
+
   const pagamentosFiltrados = useMemo(
     () =>
-      filtroStatusPagamento === "TODOS"
-        ? pagamentos
-        : pagamentos.filter((p) => p.status === filtroStatusPagamento),
-    [pagamentos, filtroStatusPagamento]
+      pagamentos.filter(
+        (p) =>
+          (filtroStatusPagamento === "TODOS" || p.status === filtroStatusPagamento) &&
+          (anoFiltrado === null || p.ano === anoFiltrado)
+      ),
+    [pagamentos, filtroStatusPagamento, anoFiltrado]
   );
 
   // Pendentes = ainda não recebidos (tudo exceto PAGO). Contagem + soma R$ por status.
@@ -473,22 +506,40 @@ export default function ClienteDetalhesPage() {
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-lg">Pagamentos Projetados</CardTitle>
-          <Select
-            value={filtroStatusPagamento}
-            onValueChange={(v) => setFiltroStatusPagamento(v as StatusPagamento | "TODOS")}
-          >
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="TODOS">Todos os status</SelectItem>
-              {STATUS_PAGAMENTO.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {STATUS_PAGAMENTO_FILTRO_LABEL[status]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={filtroAnoPagamento}
+              onValueChange={(v) => setFiltroAnoPagamento(v as FiltroAnoPagamento)}
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent>
+                {(["TODOS", "anterior", "vigente", "proximo"] as const).map((opcao) => (
+                  <SelectItem key={opcao} value={opcao}>
+                    {FILTRO_ANO_LABEL[opcao]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filtroStatusPagamento}
+              onValueChange={(v) => setFiltroStatusPagamento(v as StatusPagamento | "TODOS")}
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="TODOS">Todos os status</SelectItem>
+                {STATUS_PAGAMENTO.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {STATUS_PAGAMENTO_FILTRO_LABEL[status]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -510,9 +561,9 @@ export default function ClienteDetalhesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                pagamentosFiltrados.map((pagamento, index) => (
+                pagamentosFiltrados.map((pagamento) => (
                   <TableRow key={pagamento.id}>
-                    <TableCell>{rotuloParcela(pagamento, index, pagamentosFiltrados)}</TableCell>
+                    <TableCell>{rotuloParcela(pagamento, pagamentos)}</TableCell>
                     <TableCell>
                       {String(pagamento.mes).padStart(2, "0")}/{pagamento.ano}
                     </TableCell>

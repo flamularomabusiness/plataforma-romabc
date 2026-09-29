@@ -23,13 +23,20 @@ import { TabelaMensalidadesCliente } from "@/components/dashboard/tabela-mensali
 import { useDashboardKPIs, useMensalidadesPorCliente, useUNEs } from "@/lib/queries";
 import { useAcessoLiberado } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { TIPOS_PAGAMENTO, type TipoContratoFiltro } from "@/lib/types";
+import { OPCOES_ANO_CIVIL, TIPOS_PAGAMENTO, type AnoCivil, type TipoContratoFiltro } from "@/lib/types";
 
 const OPCOES_PERIODO = [
   { value: "6", label: "Últimos 6 meses" },
   { value: "12", label: "Últimos 12 meses" },
   { value: "24", label: "Últimos 24 meses" },
 ];
+
+const ANO_CIVIL_LABEL: Record<AnoCivil, string> = {
+  nenhum: "Janela de meses",
+  anterior: "Ano Anterior",
+  vigente: "Ano Vigente",
+  proximo: "Próximo Ano",
+};
 
 const TIPO_PAGAMENTO_LABEL: Record<TipoContratoFiltro, string> = {
   TODOS: "Todos os tipos",
@@ -50,7 +57,7 @@ export default function DashboardKPIsPage() {
   const acesso = useAcessoLiberado("dashboard");
 
   const [periodo, setPeriodo] = useState("12");
-  const [anoVigente, setAnoVigente] = useState(false);
+  const [anoCivil, setAnoCivil] = useState<AnoCivil>("nenhum");
   const [apenasProjetado, setApenasProjetado] = useState(false);
   const [tipoPagamento, setTipoPagamento] = useState<TipoContratoFiltro>("TODOS");
 
@@ -71,7 +78,7 @@ export default function DashboardKPIsPage() {
 
   const { data, isLoading, isFetching, isError, refetch } = useDashboardKPIs({
     quantidadeMeses: Number(periodo),
-    anoVigente,
+    anoCivil,
     apenasProjetado,
     tipoPagamento,
   });
@@ -127,7 +134,7 @@ export default function DashboardKPIsPage() {
         <TabsContent value="por-une" className="space-y-6 pt-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-4">
-              <Select value={periodo} onValueChange={setPeriodo} disabled={anoVigente}>
+              <Select value={periodo} onValueChange={setPeriodo} disabled={anoCivil !== "nenhum"}>
                 <SelectTrigger className="w-44">
                   <SelectValue />
                 </SelectTrigger>
@@ -135,6 +142,19 @@ export default function DashboardKPIsPage() {
                   {OPCOES_PERIODO.map((opcao) => (
                     <SelectItem key={opcao.value} value={opcao.value}>
                       {opcao.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={anoCivil} onValueChange={(v) => setAnoCivil(v as AnoCivil)}>
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OPCOES_ANO_CIVIL.map((opcao) => (
+                    <SelectItem key={opcao} value={opcao}>
+                      {ANO_CIVIL_LABEL[opcao]}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -160,11 +180,6 @@ export default function DashboardKPIsPage() {
                   onCheckedChange={(v) => setApenasProjetado(v === true)}
                 />
                 Projetados
-              </label>
-
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={anoVigente} onCheckedChange={(v) => setAnoVigente(v === true)} />
-                Ano Vigente
               </label>
             </div>
 

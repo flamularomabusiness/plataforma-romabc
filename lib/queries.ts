@@ -1423,12 +1423,15 @@ function gerarJanelaMeses(quantidade: number): MesInterno[] {
 }
 
 /**
- * Modo "Ano Vigente": janeiro a dezembro do ano corrente, incluindo o mês
- * atual. Mês atual e anteriores = recebido/fechado (futuro:false); meses
- * depois do atual = ainda não ocorreram, então os valores são só o projetado
- * (futuro:true, estilo visual diferenciado no front — 60% opacity + *).
+ * Modo "ano civil": janeiro a dezembro do `ano` dado (Anterior/Vigente/
+ * Próximo — resolvido pelo chamador a partir de AnoCivil). Meses que já
+ * ocorreram (ano < atual, ou ano atual com mês <= atual) = recebido/
+ * fechado (futuro:false); os demais = ainda não ocorreram, valores só
+ * projetados (futuro:true, estilo visual diferenciado no front — 60%
+ * opacity + *). No ano anterior isso é sempre false pra todo mundo; no
+ * próximo ano, sempre true.
  */
-function gerarMesesAnoVigente(): MesInterno[] {
+function gerarMesesAnoCivil(ano: number): MesInterno[] {
   const hoje = new Date();
   const anoAtual = hoje.getFullYear();
   const mesAtual = hoje.getMonth() + 1;
@@ -1436,9 +1439,9 @@ function gerarMesesAnoVigente(): MesInterno[] {
   for (let mes = 1; mes <= 12; mes++) {
     meses.push({
       mes,
-      ano: anoAtual,
-      label: `${MESES_ABREV[mes - 1]}-${String(anoAtual).slice(2)}`,
-      futuro: mes > mesAtual,
+      ano,
+      label: `${MESES_ABREV[mes - 1]}-${String(ano).slice(2)}`,
+      futuro: ano > anoAtual || (ano === anoAtual && mes > mesAtual),
     });
   }
   return meses;
@@ -1492,7 +1495,16 @@ async function fetchDashboardKPIsImpl(filtros: DashboardKPIsFiltros): Promise<Da
     ? filtros.quantidadeMeses
     : 12;
 
-  const meses = filtros.anoVigente ? gerarMesesAnoVigente() : gerarJanelaMeses(periodoValido);
+  const usaAnoCivil = filtros.anoCivil !== "nenhum";
+  const anoAtual = new Date().getFullYear();
+  const anoCivilResolvido =
+    filtros.anoCivil === "anterior"
+      ? anoAtual - 1
+      : filtros.anoCivil === "proximo"
+        ? anoAtual + 1
+        : anoAtual; // "vigente" (ou "nenhum", ignorado se usaAnoCivil for false)
+
+  const meses = usaAnoCivil ? gerarMesesAnoCivil(anoCivilResolvido) : gerarJanelaMeses(periodoValido);
   const inicio = meses[0];
   const fim = meses[meses.length - 1];
 
@@ -1502,7 +1514,7 @@ async function fetchDashboardKPIsImpl(filtros: DashboardKPIsFiltros): Promise<Da
       "mes, ano, valor_projetado, status, contrato_id, contrato:contratos(une_id, tipo_pagamento, status)"
     );
 
-  query = filtros.anoVigente
+  query = usaAnoCivil
     ? query.eq("ano", inicio.ano)
     : query.or(
         `and(ano.eq.${inicio.ano},mes.gte.${inicio.mes}),and(ano.eq.${fim.ano},mes.lte.${fim.mes}),and(ano.gt.${inicio.ano},ano.lt.${fim.ano})`
@@ -1618,7 +1630,7 @@ export function useDashboardKPIs(filtros: DashboardKPIsFiltros) {
     queryKey: [
       "dashboard-kpis",
       filtros.quantidadeMeses,
-      filtros.anoVigente,
+      filtros.anoCivil,
       filtros.apenasProjetado,
       filtros.tipoPagamento,
     ],
