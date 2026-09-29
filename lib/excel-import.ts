@@ -232,6 +232,9 @@ export function validarLinhasClientes(
     };
 
     const empresa = textoCelula(linha["empresa"]);
+    // Opcional: coluna pode faltar (linha["nome fantasia"] vem undefined) ou
+    // vir vazia — nos dois casos vira null, sem validação/erro nenhum.
+    const nomeFantasia = textoCelula(linha["nome fantasia"]) || null;
     const cnpjBruto = textoCelula(linha["cnpj"]);
     const une = textoCelula(linha["une"]);
     const produto = textoCelula(linha["produto"]);
@@ -284,6 +287,7 @@ export function validarLinhasClientes(
       linha: index + 2, // +2: header é a linha 1 da planilha, dados começam na 2
       dados: {
         empresa,
+        nome_fantasia: nomeFantasia,
         cnpj: cnpjBruto ? formatarCNPJ(cnpjBruto) : cnpjBruto,
         une,
         produto,

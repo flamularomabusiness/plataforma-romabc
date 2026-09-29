@@ -33,6 +33,7 @@ const USER_ROLES = ["comercial", "administrator", "financeiro"] as const;
 
 const clienteRowSchema = z.object({
   empresa: z.string().min(1),
+  nome_fantasia: z.string().nullable().optional(),
   cnpj: z.string().min(1),
   une: z.string().min(1),
   produto: z.string().min(1),

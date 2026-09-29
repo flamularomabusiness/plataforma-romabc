@@ -414,6 +414,8 @@ export interface PagamentoAVistaCliente {
  */
 export interface ImportClienteRow {
   empresa: string;
+  /** Opcional — coluna pode faltar ou vir vazia na planilha, sem erro. */
+  nome_fantasia: string | null;
   cnpj: string;
   une: string;
   produto: string;

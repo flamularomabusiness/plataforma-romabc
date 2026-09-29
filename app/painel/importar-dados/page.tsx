@@ -184,6 +184,7 @@ export default function ImportarDadosPage() {
               linhas={preview.clientes}
               colunas={[
                 { label: "Empresa", render: (d) => d.empresa },
+                { label: "Nome Fantasia", render: (d) => d.nome_fantasia ?? "-" },
                 { label: "CNPJ", render: (d) => d.cnpj },
                 { label: "UNE", render: (d) => d.une },
                 { label: "Produto", render: (d) => d.produto },
