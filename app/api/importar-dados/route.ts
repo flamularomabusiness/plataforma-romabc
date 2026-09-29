@@ -37,7 +37,7 @@ const clienteRowSchema = z.object({
   cnpj: z.string().min(1),
   une: z.string().min(1),
   produto: z.string().min(1),
-  valor: z.number().positive(),
+  valor: z.number().nonnegative(),
   status: z.enum(STATUS_CLIENTE),
   data_inicio: z.string().min(1),
   // Normalização (recorrente/venda_unica/parcelado) e validação de fato
@@ -51,7 +51,7 @@ const pagamentoRowSchema = z.object({
   empresa: z.string().min(1),
   nro_parcela: z.number().int().positive().nullable(),
   data_vencimento: z.string().min(1),
-  valor: z.number().positive(),
+  valor: z.number().nonnegative(),
   status: z.enum(STATUS_PAGAMENTO),
   data_pagamento: z.string().nullable(),
 });
