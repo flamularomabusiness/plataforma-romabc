@@ -210,6 +210,10 @@ export default function ClienteDetalhesPage() {
             <p className="font-medium">{cliente.nome_razao_social}</p>
           </div>
           <div>
+            <p className="text-sm text-muted-foreground">Nome Fantasia</p>
+            <p className="font-medium">{cliente.nome_fantasia ?? "-"}</p>
+          </div>
+          <div>
             <p className="text-sm text-muted-foreground">CNPJ</p>
             <p className="font-medium">{cliente.cpf_cnpj_responsavel}</p>
           </div>

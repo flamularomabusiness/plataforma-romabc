@@ -24,6 +24,7 @@ const pessoaPayloadSchema = z.object({
 
 const empresaPayloadSchema = z.object({
   nome_razao_social: z.string().min(1),
+  nome_fantasia: z.string().nullable().optional(),
   cpf_cnpj_responsavel: z.string().min(1),
   cidade: z.string().nullable().optional(),
   estado: z.string().length(2).nullable().optional(),

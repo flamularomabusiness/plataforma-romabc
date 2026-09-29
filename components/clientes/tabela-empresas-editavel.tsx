@@ -53,6 +53,7 @@ export function TabelaEmpresasEditavel({
     setEditId(empresa.id);
     setForm({
       nome_razao_social: empresa.nome_razao_social,
+      nome_fantasia: empresa.nome_fantasia,
       cpf_cnpj_responsavel: empresa.cpf_cnpj_responsavel,
       cidade: empresa.cidade,
       estado: empresa.estado,
@@ -107,6 +108,7 @@ export function TabelaEmpresasEditavel({
       <TableHeader>
         <TableRow>
           <TableHead>Razão Social</TableHead>
+          <TableHead>Nome Fantasia</TableHead>
           <TableHead>CNPJ</TableHead>
           <TableHead>Cidade/UF</TableHead>
           <TableHead>Faturamento Médio</TableHead>
@@ -118,7 +120,7 @@ export function TabelaEmpresasEditavel({
       <TableBody>
         {linhas.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center text-muted-foreground">
+            <TableCell colSpan={8} className="text-center text-muted-foreground">
               Nenhuma empresa vinculada.
             </TableCell>
           </TableRow>
@@ -139,6 +141,18 @@ export function TabelaEmpresasEditavel({
                     />
                   ) : (
                     empresa.nome_razao_social
+                  )}
+                </TableCell>
+
+                <TableCell>
+                  {emEdicao ? (
+                    <Input
+                      className="w-36"
+                      value={form.nome_fantasia ?? ""}
+                      onChange={(e) => setForm((f) => ({ ...f, nome_fantasia: e.target.value }))}
+                    />
+                  ) : (
+                    empresa.nome_fantasia ?? "-"
                   )}
                 </TableCell>
 

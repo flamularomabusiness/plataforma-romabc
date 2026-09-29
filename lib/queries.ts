@@ -535,6 +535,7 @@ export function useHistoricoImportacoes() {
 
 export interface AtualizarClientePayload {
   nome_razao_social?: string;
+  nome_fantasia?: string | null;
   cpf_cnpj_responsavel?: string;
   email_responsavel?: string | null;
   telefone_responsavel?: string | null;

@@ -95,6 +95,7 @@ export default function FormularioPage() {
       numero_empresas: values.numero_empresas,
       empresas: values.empresas.map((e) => ({
         nome_razao_social: e.nome_razao_social,
+        nome_fantasia: e.nome_fantasia || null,
         cpf_cnpj_responsavel: e.cpf_cnpj_responsavel,
         cidade: e.cidade || null,
         estado: e.estado || null,

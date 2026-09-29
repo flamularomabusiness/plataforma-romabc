@@ -10,6 +10,7 @@ import {
 
 export const empresaSchema = z.object({
   nome_razao_social: z.string().min(1, "Razão social é obrigatória"),
+  nome_fantasia: z.string().optional().or(z.literal("")),
   cpf_cnpj_responsavel: z
     .string()
     .min(1, "CNPJ é obrigatório")
@@ -261,6 +262,7 @@ export type FormularioContratoValues = z.infer<typeof formularioContratoSchema>;
 
 export const empresaVazia = {
   nome_razao_social: "",
+  nome_fantasia: "",
   cpf_cnpj_responsavel: "",
   cidade: "",
   estado: "SP" as const,

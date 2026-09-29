@@ -124,6 +124,20 @@ export function SecaoEmpresaCliente() {
 
             <FormField
               control={form.control}
+              name={`empresas.${index}.nome_fantasia`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nome Fantasia</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ex: Roma BC" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name={`empresas.${index}.cpf_cnpj_responsavel`}
               render={({ field }) => (
                 <FormItem>

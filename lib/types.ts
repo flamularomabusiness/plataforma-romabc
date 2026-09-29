@@ -104,6 +104,7 @@ export interface Consultora {
 export interface Cliente {
   id: string;
   nome_razao_social: string;
+  nome_fantasia: string | null;
   cpf_cnpj_responsavel: string;
   telefone_responsavel: string | null;
   email_responsavel: string | null;
@@ -229,6 +230,7 @@ export interface NovoContratoPayload {
   une_id: string;
   empresas: Array<{
     nome_razao_social: string;
+    nome_fantasia?: string | null;
     cpf_cnpj_responsavel: string;
     cidade: string | null;
     estado: string | null;
