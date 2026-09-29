@@ -266,7 +266,7 @@ export function validarLinhasClientes(
     }
 
     if (valor === null) marcarErro("Valor inválido");
-    else if (valor <= 0) marcarErro("Valor precisa ser maior que zero");
+    else if (valor < 0) marcarErro("Valor precisa ser igual ou maior que zero");
 
     if (!STATUS_CLIENTE.includes(statusBruto as any)) {
       marcarErro(`Status "${statusBruto || "(vazio)"}" inválido — use ATIVO, INATIVO ou INADIMPLENTE`);
@@ -343,7 +343,7 @@ export function validarLinhasPagamentos(
     }
 
     if (valor === null) marcarErro("Valor inválido");
-    else if (valor <= 0) marcarErro("Valor precisa ser maior que zero");
+    else if (valor < 0) marcarErro("Valor precisa ser igual ou maior que zero");
 
     if (!STATUS_PAGAMENTO.includes(statusBruto as any)) {
       marcarErro(
