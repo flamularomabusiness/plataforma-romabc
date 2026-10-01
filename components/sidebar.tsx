@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -20,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { logout, podeAcessar, ROLE_LABELS, useUserRole, type Funcionalidade } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Logo } from "@/components/logo";
 
 const ITENS_MENU: Array<{
   href: string;
@@ -67,7 +67,7 @@ export function Sidebar() {
   return (
     <>
       <div className="flex items-center justify-between border-b bg-background p-3 lg:hidden">
-        <Image src="/romabc-one-logo.png" alt="ROMABC ONE" width={132} height={47} priority />
+        <Logo width={120} chip priority />
         <button
           onClick={() => setAberta(!aberta)}
           className="rounded-md p-2 hover:bg-accent"
@@ -85,7 +85,7 @@ export function Sidebar() {
         )}
       >
         <div className="hidden border-b p-5 lg:block">
-          <Image src="/romabc-one-logo.png" alt="ROMABC ONE" width={150} height={54} priority />
+          <Logo width={140} chip priority />
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-4">
           {itensVisiveis.map((item) => {
@@ -129,9 +129,7 @@ export function Sidebar() {
             <LogOut className="h-4 w-4" />
             Sair
           </button>
-          <div className="flex items-center gap-1.5 pt-1 opacity-60">
-            <Image src="/romabc-one-logo.png" alt="ROMABC ONE" width={84} height={30} />
-          </div>
+          <Logo width={72} chip className="mt-1" />
         </div>
       </aside>
     </>

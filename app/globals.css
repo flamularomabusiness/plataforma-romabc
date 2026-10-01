@@ -95,6 +95,33 @@
 }
 
 @layer utilities {
+  /* Força a paleta clara independente do tema ativo — usado no card do
+     login, que deve ficar sempre branco (o logo tem texto escuro fixo,
+     sem variante pra dark mode). As variáveis são lidas por qualquer
+     classe Tailwind (bg-background, text-foreground etc.) dentro deste
+     container, sobrepondo as do :root/.dark por cascata normal de CSS. */
+  .theme-force-light {
+    --background: 0 0% 100%;
+    --foreground: 222.2 47.4% 11.2%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 47.4% 11.2%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+    --primary: 224 100% 21%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 16% 90%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 220 18% 94%;
+    --muted-foreground: 215.4 16.3% 40%;
+    --accent: 223 100% 95%;
+    --accent-foreground: 224 100% 21%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 224 100% 21%;
+  }
+
   /* Linhas decorativas do login "fluindo" — dasharray grande com offset
      animado dá a impressão de movimento contínuo ao longo da curva. */
   .linha-fluxo {

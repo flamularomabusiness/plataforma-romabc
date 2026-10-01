@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -11,6 +10,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Logo } from "@/components/logo";
 import { loginComEmail } from "@/lib/auth";
 
 const loginSchema = z.object({
@@ -111,9 +111,9 @@ export default function LoginPage() {
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-brand-gradient-deep px-4">
       <LinhasDecorativas />
 
-      <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white/95 p-8 shadow-2xl backdrop-blur-sm dark:bg-card/95">
+      <div className="theme-force-light relative z-10 w-full max-w-sm rounded-2xl bg-white/95 p-8 text-foreground shadow-2xl backdrop-blur-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <Image src="/romabc-one-logo.png" alt="ROMABC ONE" width={220} height={79} priority />
+          <Logo width={220} priority />
           <p className="text-sm text-muted-foreground">Entre com seu email e senha</p>
         </div>
 
