@@ -12,10 +12,12 @@ interface KpiCardProps {
 
 export function KpiCard({ titulo, valor, icone: Icon, className }: KpiCardProps) {
   return (
-    <Card>
+    <Card className="border-t-4 border-t-brand-secondary">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{titulo}</CardTitle>
-        <Icon className={cn("h-5 w-5 text-primary", className)} />
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-gradient">
+          <Icon className={cn("h-4 w-4 text-white", className)} />
+        </span>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{valor}</div>

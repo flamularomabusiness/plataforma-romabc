@@ -20,28 +20,65 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
-/** Linhas decorativas diagonais nas laterais — efeito visual "tech" do design ROMABC ONE. */
+/**
+ * Linhas decorativas curvas nas laterais — efeito "tech" em movimento
+ * (stroke-dasharray + dashoffset animado em .linha-fluxo, globals.css).
+ * Duração/atraso variam por linha pra não ficarem todas em sincronia.
+ */
 function LinhasDecorativas() {
   return (
     <svg
       className="pointer-events-none absolute inset-0 h-full w-full"
       preserveAspectRatio="none"
       viewBox="0 0 1200 800"
+      fill="none"
       aria-hidden
     >
-      <g stroke="#5E8CFF" strokeWidth="1.5" opacity="0.25">
-        <line x1="-100" y1="120" x2="400" y2="-100" />
-        <line x1="-60" y1="260" x2="440" y2="40" />
-        <line x1="-20" y1="400" x2="480" y2="180" />
-        <line x1="20" y1="540" x2="520" y2="320" />
-        <line x1="900" y1="900" x2="1300" y2="600" />
-        <line x1="840" y1="880" x2="1260" y2="500" />
-        <line x1="780" y1="860" x2="1220" y2="420" />
-      </g>
-      <g stroke="#FFFFFF" strokeWidth="1" opacity="0.1">
-        <line x1="-100" y1="60" x2="360" y2="-160" />
-        <line x1="960" y1="900" x2="1340" y2="660" />
-      </g>
+      <path
+        d="M -100 140 C 150 40, 250 220, 480 120 S 760 -40, 1000 80"
+        stroke="#5E8CFF"
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.3"
+        className="linha-fluxo"
+        style={{ animationDuration: "7s" }}
+      />
+      <path
+        d="M -120 300 C 120 220, 260 400, 520 280 S 820 140, 1100 260"
+        stroke="#5E8CFF"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        opacity="0.22"
+        className="linha-fluxo"
+        style={{ animationDuration: "9s", animationDirection: "reverse" }}
+      />
+      <path
+        d="M -80 460 C 180 400, 300 560, 560 440 S 840 320, 1120 420"
+        stroke="#FFFFFF"
+        strokeWidth="1"
+        strokeLinecap="round"
+        opacity="0.12"
+        className="linha-fluxo"
+        style={{ animationDuration: "11s" }}
+      />
+      <path
+        d="M 100 820 C 320 700, 480 880, 700 740 S 980 580, 1300 680"
+        stroke="#5E8CFF"
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.3"
+        className="linha-fluxo"
+        style={{ animationDuration: "8s", animationDirection: "reverse" }}
+      />
+      <path
+        d="M 60 700 C 280 620, 420 760, 660 640 S 940 500, 1260 580"
+        stroke="#FFFFFF"
+        strokeWidth="1"
+        strokeLinecap="round"
+        opacity="0.12"
+        className="linha-fluxo"
+        style={{ animationDuration: "10s" }}
+      />
     </svg>
   );
 }
@@ -71,7 +108,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-brand-gradient px-4">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-brand-gradient-deep px-4">
       <LinhasDecorativas />
 
       <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white/95 p-8 shadow-2xl backdrop-blur-sm dark:bg-card/95">

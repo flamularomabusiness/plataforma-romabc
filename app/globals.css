@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 216 33% 97%;
+    --background: 220 24% 92%;
     --foreground: 222.2 47.4% 11.2%;
 
     --card: 0 0% 100%;
@@ -16,11 +16,11 @@
     --primary: 224 100% 21%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 96%;
+    --secondary: 220 16% 90%;
     --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 220 20% 94%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 18% 88%;
+    --muted-foreground: 215.4 16.3% 40%;
 
     --accent: 223 100% 95%;
     --accent-foreground: 224 100% 21%;
@@ -45,25 +45,25 @@
   }
 
   .dark {
-    --background: 210 25% 8%;
+    --background: 224 32% 6%;
     --foreground: 210 20% 98%;
 
-    --card: 225 28% 14%;
+    --card: 222 24% 19%;
     --card-foreground: 210 20% 98%;
 
-    --popover: 225 28% 14%;
+    --popover: 222 24% 19%;
     --popover-foreground: 210 20% 98%;
 
     --primary: 223 100% 68%;
     --primary-foreground: 225 28% 10%;
 
-    --secondary: 218 23% 23%;
+    --secondary: 222 20% 26%;
     --secondary-foreground: 210 20% 98%;
 
-    --muted: 222 20% 18%;
+    --muted: 222 22% 14%;
     --muted-foreground: 215 16% 65%;
 
-    --accent: 222 25% 20%;
+    --accent: 222 26% 27%;
     --accent-foreground: 210 20% 98%;
 
     --destructive: 0 62% 45%;
@@ -91,5 +91,26 @@
   body {
     @apply bg-background text-foreground;
     transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+@layer utilities {
+  /* Linhas decorativas do login "fluindo" — dasharray grande com offset
+     animado dá a impressão de movimento contínuo ao longo da curva. */
+  .linha-fluxo {
+    stroke-dasharray: 18 14;
+    animation: fluxo-linha linear infinite;
+  }
+
+  @keyframes fluxo-linha {
+    to {
+      stroke-dashoffset: -256;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .linha-fluxo {
+    animation: none;
   }
 }
