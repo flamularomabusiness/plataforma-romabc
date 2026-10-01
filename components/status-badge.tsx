@@ -9,13 +9,13 @@ type Status = StatusCliente | StatusPagamento;
  * significa a mesma coisa nos dois — mesma entrada, mesma cor, um mapa só.
  */
 const STATUS_CONFIG: Record<Status, { label: string; variant: BadgeProps["variant"]; emoji: string }> = {
-  ATIVO: { label: "ATIVO", variant: "success", emoji: "🟢" },
-  INATIVO: { label: "INATIVO", variant: "neutral", emoji: "⚪" },
-  INADIMPLENTE: { label: "INADIMPLENTE", variant: "destructive", emoji: "🔴" },
-  PROJETADO: { label: "PROJETADO", variant: "info", emoji: "🔵" },
-  PAGO: { label: "PAGO", variant: "success", emoji: "🟢" },
-  ATRASADO: { label: "ATRASADO", variant: "warning", emoji: "🟡" },
-  CANCELADO: { label: "CANCELADO", variant: "neutral", emoji: "⚫" },
+  ATIVO: { label: "Ativo", variant: "success", emoji: "🟢" },
+  INATIVO: { label: "Inativo", variant: "neutral", emoji: "⚪" },
+  INADIMPLENTE: { label: "Inadimplente", variant: "destructive", emoji: "🔴" },
+  PROJETADO: { label: "Projetado", variant: "info", emoji: "🔵" },
+  PAGO: { label: "Pago", variant: "success", emoji: "🟢" },
+  ATRASADO: { label: "Atrasado", variant: "warning", emoji: "🟡" },
+  CANCELADO: { label: "Cancelado", variant: "neutral", emoji: "⚫" },
 };
 
 const SIZE_CLASS: Record<"sm" | "md" | "lg", string> = {

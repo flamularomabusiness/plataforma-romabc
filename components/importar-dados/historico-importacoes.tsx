@@ -17,6 +17,11 @@ import { useHistoricoImportacoes } from "@/lib/queries";
 import { formatDate } from "@/lib/utils";
 import { ROLE_LABELS, type UserRole } from "@/lib/auth";
 
+const STATUS_IMPORTACAO_LABEL: Record<string, string> = {
+  SUCESSO: "Sucesso",
+  ERRO: "Erro",
+};
+
 function formatarDataHora(iso: string): string {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(
     new Date(iso)
@@ -74,7 +79,7 @@ export function HistoricoImportacoes() {
                   </TableCell>
                   <TableCell>
                     <Badge variant={registro.status === "SUCESSO" ? "success" : "destructive"}>
-                      {registro.status}
+                      {STATUS_IMPORTACAO_LABEL[registro.status] ?? registro.status}
                     </Badge>
                   </TableCell>
                 </TableRow>

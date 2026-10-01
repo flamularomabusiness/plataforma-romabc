@@ -20,9 +20,9 @@ import { calcularStatusSugerido } from "@/lib/status-helper";
 import { STATUS_CLIENTE, type ClienteDetalhes, type StatusCliente } from "@/lib/types";
 
 const STATUS_LABELS: Record<StatusCliente, string> = {
-  ATIVO: "ATIVO",
-  INATIVO: "INATIVO",
-  INADIMPLENTE: "INADIMPLENTE",
+  ATIVO: "Ativo",
+  INATIVO: "Inativo",
+  INADIMPLENTE: "Inadimplente",
 };
 
 export function EditorStatusCliente({ cliente }: { cliente: ClienteDetalhes }) {

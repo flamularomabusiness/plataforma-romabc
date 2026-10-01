@@ -143,6 +143,12 @@ const STATUS_CONTRATO_VARIANT: Record<StatusContrato, "success" | "secondary" | 
   cancelado: "destructive",
 };
 
+const STATUS_CONTRATO_LABEL: Record<StatusContrato, string> = {
+  ativo: "Ativo",
+  inativo: "Inativo",
+  cancelado: "Cancelado",
+};
+
 export default function ClienteDetalhesPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -432,7 +438,7 @@ export default function ClienteDetalhesPage() {
                     <TableCell>{contrato.consultora?.nome ?? "-"}</TableCell>
                     <TableCell>
                       <Badge variant={STATUS_CONTRATO_VARIANT[contrato.status]}>
-                        {contrato.status}
+                        {STATUS_CONTRATO_LABEL[contrato.status]}
                       </Badge>
                     </TableCell>
                     <TableCell>
