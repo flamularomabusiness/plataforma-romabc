@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -18,6 +19,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { logout, podeAcessar, ROLE_LABELS, useUserRole, type Funcionalidade } from "@/lib/auth";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const ITENS_MENU: Array<{
   href: string;
@@ -64,8 +66,8 @@ export function Sidebar() {
 
   return (
     <>
-      <div className="flex items-center justify-between border-b bg-background p-4 lg:hidden">
-        <span className="text-lg font-bold text-primary">ROMA BC</span>
+      <div className="flex items-center justify-between border-b bg-background p-3 lg:hidden">
+        <Image src="/romabc-one-logo.png" alt="ROMABC ONE" width={132} height={47} priority />
         <button
           onClick={() => setAberta(!aberta)}
           className="rounded-md p-2 hover:bg-accent"
@@ -82,8 +84,8 @@ export function Sidebar() {
           aberta ? "flex" : "hidden"
         )}
       >
-        <div className="hidden border-b p-6 lg:block">
-          <span className="text-xl font-bold text-primary">ROMA BC</span>
+        <div className="hidden border-b p-5 lg:block">
+          <Image src="/romabc-one-logo.png" alt="ROMABC ONE" width={150} height={54} priority />
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-4">
           {itensVisiveis.map((item) => {
@@ -104,8 +106,8 @@ export function Sidebar() {
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   ativo
-                    ? "bg-primary text-primary-foreground"
-                    : "text-foreground hover:bg-accent"
+                    ? "bg-brand-gradient text-white shadow-sm"
+                    : "text-foreground hover:bg-accent hover:text-accent-foreground"
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -114,18 +116,22 @@ export function Sidebar() {
             );
           })}
         </nav>
-        <div className="border-t p-4 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
+        <div className="space-y-3 border-t p-4">
+          <ThemeToggle className="w-full justify-start" />
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <User className="h-4 w-4" />
             Tipo: {ROLE_LABELS[userRole]}
           </div>
           <button
             onClick={sair}
-            className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary"
+            className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-brand-secondary"
           >
             <LogOut className="h-4 w-4" />
             Sair
           </button>
+          <div className="flex items-center gap-1.5 pt-1 opacity-60">
+            <Image src="/romabc-one-logo.png" alt="ROMABC ONE" width={84} height={30} />
+          </div>
         </div>
       </aside>
     </>

@@ -63,6 +63,17 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        brand: {
+          primary: "#001C6B",
+          secondary: "#244DD8",
+          accent: "#5E8CFF",
+        },
+      },
+      fontFamily: {
+        sans: ["var(--font-montserrat)", "system-ui", "sans-serif"],
+      },
+      backgroundImage: {
+        "brand-gradient": "linear-gradient(135deg, #001C6B 0%, #244DD8 100%)",
       },
       borderRadius: {
         lg: "var(--radius)",

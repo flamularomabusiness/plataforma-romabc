@@ -4,26 +4,26 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 216 33% 97%;
+    --foreground: 222.2 47.4% 11.2%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 222.2 47.4% 11.2%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 222.2 47.4% 11.2%;
 
-    --primary: 245 90% 63%;
+    --primary: 224 100% 21%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 5% 96%;
+    --secondary: 220 14% 96%;
     --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 240 5% 96%;
+    --muted: 220 20% 94%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 240 5% 96%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 223 100% 95%;
+    --accent-foreground: 224 100% 21%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
@@ -37,11 +37,50 @@
     --info: 217 91% 60%;
     --info-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 245 90% 63%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 224 100% 21%;
 
     --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 210 25% 8%;
+    --foreground: 210 20% 98%;
+
+    --card: 225 28% 14%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 225 28% 14%;
+    --popover-foreground: 210 20% 98%;
+
+    --primary: 223 100% 68%;
+    --primary-foreground: 225 28% 10%;
+
+    --secondary: 218 23% 23%;
+    --secondary-foreground: 210 20% 98%;
+
+    --muted: 222 20% 18%;
+    --muted-foreground: 215 16% 65%;
+
+    --accent: 222 25% 20%;
+    --accent-foreground: 210 20% 98%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 160 70% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 80% 48%;
+    --warning-foreground: 24 9% 10%;
+
+    --info: 217 80% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 218 23% 23%;
+    --input: 218 23% 23%;
+    --ring: 223 100% 68%;
   }
 }
 
@@ -51,5 +90,6 @@
   }
   body {
     @apply bg-background text-foreground;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 }

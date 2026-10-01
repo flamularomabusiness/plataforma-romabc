@@ -75,9 +75,10 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Todas as rotas exceto assets estáticos e API routes (uma API route
+    // Todas as rotas exceto assets estáticos (incl. arquivos servidos
+    // direto de /public, como o logo) e API routes (uma API route
     // interceptada por um redirect vira uma resposta HTML de redirecionamento
     // em vez de rodar — quebraria /api/importar-dados e o webhook).
-    "/((?!_next/static|_next/image|favicon.ico|api/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico)$).*)",
   ],
 };
