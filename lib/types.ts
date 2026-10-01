@@ -50,11 +50,15 @@ export type StatusContrato = "ativo" | "inativo" | "cancelado";
 
 /**
  * Status do pagamento — gravado (maiúsculo) em pagamentos_projetados.status,
- * com check constraint no banco que só aceita exatamente estes 4 valores
- * (confirmado testando um insert/update direto contra o banco — "cancelado"
- * NÃO é aceito, "INADIMPLENTE" é o 4º estado real).
+ * com check constraint no banco (supabase/migration_status_cancelado.sql
+ * acrescentou CANCELADO de volta à lista — tinha sido substituído por
+ * INADIMPLENTE direto no Supabase Studio em algum momento anterior, sem
+ * migration correspondente). CANCELADO = parcela que não será mais cobrada
+ * mas cujo histórico fica mantido — não conta em nenhuma projeção/soma de
+ * receita (ver fetchKPIsImpl, fetchReceitaMensalImpl, fetchDashboardKPIsImpl
+ * em lib/queries.ts).
  */
-export const STATUS_PAGAMENTO = ["PROJETADO", "PAGO", "ATRASADO", "INADIMPLENTE"] as const;
+export const STATUS_PAGAMENTO = ["PROJETADO", "PAGO", "ATRASADO", "INADIMPLENTE", "CANCELADO"] as const;
 export type StatusPagamento = (typeof STATUS_PAGAMENTO)[number];
 
 export const GRAUS_DIFICULDADE = ["BAIXO", "MEDIO", "ALTO"] as const;

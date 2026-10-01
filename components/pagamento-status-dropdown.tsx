@@ -20,6 +20,7 @@ const STATUS_LABELS: Record<StatusPagamento, string> = {
   PAGO: "Pago",
   ATRASADO: "Atrasado",
   INADIMPLENTE: "Inadimplente",
+  CANCELADO: "Cancelado",
 };
 
 /** Hoje no formato "YYYY-MM-DD", pra usar como default do campo Data Pagamento. */

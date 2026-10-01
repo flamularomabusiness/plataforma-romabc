@@ -6,6 +6,7 @@ const INDICADOR_STATUS: Record<StatusPagamento, { emoji: string; classe: string;
   PROJETADO: { emoji: "🟡", classe: "bg-amber-50 dark:bg-amber-950", label: "Pendente" },
   ATRASADO: { emoji: "🔴", classe: "bg-red-50 dark:bg-red-950", label: "Atrasado" },
   INADIMPLENTE: { emoji: "🔴", classe: "bg-red-50 dark:bg-red-950", label: "Inadimplente" },
+  CANCELADO: { emoji: "⚫", classe: "bg-gray-100 dark:bg-gray-900", label: "Cancelado" },
 };
 
 const SEM_MOVIMENTO = { emoji: "⚪", classe: "", label: "Sem movimento" };

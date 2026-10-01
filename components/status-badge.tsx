@@ -15,6 +15,7 @@ const STATUS_CONFIG: Record<Status, { label: string; variant: BadgeProps["varian
   PROJETADO: { label: "PROJETADO", variant: "info", emoji: "🔵" },
   PAGO: { label: "PAGO", variant: "success", emoji: "🟢" },
   ATRASADO: { label: "ATRASADO", variant: "warning", emoji: "🟡" },
+  CANCELADO: { label: "CANCELADO", variant: "neutral", emoji: "⚫" },
 };
 
 const SIZE_CLASS: Record<"sm" | "md" | "lg", string> = {

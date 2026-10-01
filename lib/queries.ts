@@ -330,7 +330,10 @@ async function fetchKPIsImpl(): Promise<KPIs> {
       .select("valor_projetado, contrato:contratos!inner(status)")
       .eq("mes", mes)
       .eq("ano", ano)
-      .eq("contrato.status", "ativo"),
+      .eq("contrato.status", "ativo")
+      // CANCELADO não conta em nenhuma projeção de receita — histórico fica
+      // mantido na tabela, só não entra na soma.
+      .neq("status", "CANCELADO"),
     supabase
       .from("pagamentos_projetados")
       .select("id", { count: "exact" })
@@ -451,7 +454,10 @@ async function fetchReceitaMensalImpl(): Promise<ReceitaMensal[]> {
   if (error) throw new Error(error.message);
 
   return meses.map(({ mes, ano, label }) => {
-    const doMes = (data ?? []).filter((p: any) => p.mes === mes && p.ano === ano);
+    // CANCELADO não conta em nenhuma projeção/soma de receita.
+    const doMes = (data ?? []).filter(
+      (p: any) => p.mes === mes && p.ano === ano && p.status !== "CANCELADO"
+    );
     const projetada = doMes.reduce((s: number, p: any) => s + Number(p.valor_projetado ?? 0), 0);
     const realizada = doMes
       .filter((p: any) => p.status === "PAGO")
@@ -775,6 +781,7 @@ export async function fetchResumoStatusPagamentos(
     PAGO: { count: 0, total: 0 },
     ATRASADO: { count: 0, total: 0 },
     INADIMPLENTE: { count: 0, total: 0 },
+    CANCELADO: { count: 0, total: 0 },
   };
 
   const { data: contratosLigados, error: contratosError } = await supabase
@@ -1533,7 +1540,9 @@ async function fetchDashboardKPIsImpl(filtros: DashboardKPIsFiltros): Promise<Da
   if (unesError) throw new Error(unesError.message);
   if (pagamentosError) throw new Error(pagamentosError.message);
 
-  let pagamentosValidos = (pagamentos ?? []) as any[];
+  // CANCELADO não conta em nenhuma projeção/soma de receita (histórico fica
+  // mantido na tabela, só não entra na soma de faturamento).
+  let pagamentosValidos = (pagamentos ?? []).filter((p: any) => p.status !== "CANCELADO") as any[];
   if (filtros.tipoPagamento !== "TODOS") {
     pagamentosValidos = pagamentosValidos.filter(
       (p) => p.contrato?.tipo_pagamento === filtros.tipoPagamento
@@ -1644,6 +1653,7 @@ export function useDashboardKPIs(filtros: DashboardKPIsFiltros) {
 // ---------------------------------------------------------------------------
 
 const ORDEM_GRAVIDADE_STATUS: Record<StatusPagamento, number> = {
+  CANCELADO: 0,
   PAGO: 0,
   PROJETADO: 1,
   ATRASADO: 2,

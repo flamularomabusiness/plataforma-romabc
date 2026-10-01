@@ -28,7 +28,9 @@ import { StatusBadge } from "@/components/status-badge";
 import { CardEmpresasContrato } from "@/components/clientes/card-empresas-contrato";
 import { CardDocumentos } from "@/components/clientes/card-documentos";
 import { CardContextoContrato } from "@/components/clientes/card-contexto-contrato";
+import { DialogEditarPagamento } from "@/components/clientes/dialog-editar-pagamento";
 import { useClienteDetalhes } from "@/lib/queries";
+import { podeAcessar, useUserRole } from "@/lib/auth";
 import {
   cn,
   formatBRL,
@@ -79,6 +81,7 @@ const STATUS_PAGAMENTO_FILTRO_LABEL: Record<StatusPagamento, string> = {
   PAGO: "Pagos",
   ATRASADO: "Atrasados",
   INADIMPLENTE: "Inadimplentes",
+  CANCELADO: "Cancelados",
 };
 
 type FiltroAnoPagamento = "TODOS" | "anterior" | "vigente" | "proximo";
@@ -143,6 +146,8 @@ const STATUS_CONTRATO_VARIANT: Record<StatusContrato, "success" | "secondary" | 
 export default function ClienteDetalhesPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const userRole = useUserRole();
+  const podeEditarPagamento = podeAcessar(userRole, "editarStatusPagamento");
   const [filtroStatusPagamento, setFiltroStatusPagamento] = useState<StatusPagamento | "TODOS">(
     "TODOS"
   );
@@ -173,13 +178,14 @@ export default function ClienteDetalhesPage() {
 
   // Pendentes = ainda não recebidos (tudo exceto PAGO). Contagem + soma R$ por status.
   const resumoPendentes = useMemo(() => {
-    const buckets: Record<Exclude<StatusPagamento, "PAGO">, { count: number; total: number }> = {
+    const buckets: Record<Exclude<StatusPagamento, "PAGO" | "CANCELADO">, { count: number; total: number }> = {
       PROJETADO: { count: 0, total: 0 },
       ATRASADO: { count: 0, total: 0 },
       INADIMPLENTE: { count: 0, total: 0 },
     };
     for (const p of pagamentos) {
-      if (p.status === "PAGO") continue;
+      // CANCELADO não é "pendente" — não vai mais ser cobrado.
+      if (p.status === "PAGO" || p.status === "CANCELADO") continue;
       buckets[p.status].count += 1;
       buckets[p.status].total += Number(p.valor_projetado ?? 0);
     }
@@ -551,12 +557,13 @@ export default function ClienteDetalhesPage() {
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Forma</TableHead>
                 <TableHead>Status</TableHead>
+                {podeEditarPagamento && <TableHead className="text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {pagamentosFiltrados.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  <TableCell colSpan={podeEditarPagamento ? 7 : 6} className="text-center text-muted-foreground">
                     Nenhum pagamento encontrado.
                   </TableCell>
                 </TableRow>
@@ -577,6 +584,11 @@ export default function ClienteDetalhesPage() {
                     <TableCell>
                       <StatusBadge status={pagamento.status} size="sm" />
                     </TableCell>
+                    {podeEditarPagamento && (
+                      <TableCell className="text-right">
+                        <DialogEditarPagamento pagamento={pagamento} clienteId={cliente.id} />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
