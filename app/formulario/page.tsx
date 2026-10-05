@@ -10,7 +10,9 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { useCriarContrato, uploadContratoDocumento } from "@/lib/queries";
+import { useCriarContrato, uploadContratoDocumento, vincularAvaliacaoAoContrato } from "@/lib/queries";
+import { lerResultadoDaUrl, resumoResultado } from "@/lib/ferramentas/indice-complexidade";
+import { aplicarResultadoComplexidade } from "@/components/formulario/aplicar-complexidade";
 import type { NovoContratoPayload } from "@/lib/types";
 import { getUserId, redirectPathAfterFormulario } from "@/lib/auth";
 
@@ -50,8 +52,22 @@ export default function FormularioPage() {
   const criarContrato = useCriarContrato();
 
   useEffect(() => {
+    // Retorno da ferramenta Índice de Complexidade por redirect (aba única):
+    // aplica DEPOIS do restore do rascunho abaixo, senão o form.reset() dele
+    // sobrescreveria o grau recém-preenchido.
+    const aplicarRetornoDaFerramenta = () => {
+      const resultado = lerResultadoDaUrl(window.location.search);
+      if (!resultado) return;
+      aplicarResultadoComplexidade(form, resultado);
+      window.history.replaceState(null, "", window.location.pathname);
+      toast.success(`Grau de Dificuldade preenchido pela avaliação — ${resumoResultado(resultado)}`);
+    };
+
     const raw = window.localStorage.getItem(RASCUNHO_KEY);
-    if (!raw) return;
+    if (raw) restaurarRascunho(raw);
+    aplicarRetornoDaFerramenta();
+
+    function restaurarRascunho(raw: string) {
     try {
       const draft = JSON.parse(raw);
       // Um rascunho salvo antes de uma mudança no schema (ex.: "contatos" ->
@@ -67,6 +83,7 @@ export default function FormularioPage() {
       }
     } catch {
       window.localStorage.removeItem(RASCUNHO_KEY);
+    }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -155,6 +172,7 @@ export default function FormularioPage() {
       toast.success("Contrato criado com sucesso!");
 
       await enviarDocumentosPendentes(resultado?.contrato_id);
+      await vincularAvaliacao(values.avaliacao_complexidade_id, resultado?.contrato_id);
 
       window.localStorage.removeItem(RASCUNHO_KEY);
       setArquivosEmpresa([]);
@@ -194,6 +212,16 @@ export default function FormularioPage() {
       toast.warning(
         `Contrato criado, mas ${falhas.length} documento(s) não foram enviados: ${falhas.join(", ")}. Anexe novamente pela tela do cliente.`
       );
+    }
+  }
+
+  // Mesma lógica dos documentos: o contrato já existe, então falha aqui só avisa.
+  async function vincularAvaliacao(avaliacaoId: string | undefined, contratoId: string | undefined) {
+    if (!avaliacaoId || !contratoId) return;
+    try {
+      await vincularAvaliacaoAoContrato(avaliacaoId, contratoId);
+    } catch {
+      toast.warning("Contrato criado, mas não foi possível vincular a avaliação de complexidade a ele.");
     }
   }
 

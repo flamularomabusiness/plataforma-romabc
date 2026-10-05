@@ -49,6 +49,7 @@ import {
   TipoPagamento,
   Une,
 } from "./types";
+import type { AvaliacaoComplexidade, NovaAvaliacaoComplexidade } from "./ferramentas/indice-complexidade";
 
 const PERIODOS_DASHBOARD_VALIDOS = [6, 12, 24] as const;
 const MESES_ABREV = [
@@ -1925,4 +1926,132 @@ export function useReativarUsuario() {
     mutationFn: (id: string) => reativarUsuario(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["usuarios"] }),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Ferramentas — Índice de Complexidade (/ferramentas/indice-complexidade).
+// Tabela: avaliacoes_complexidade (supabase/migration_avaliacoes_complexidade.sql).
+// ---------------------------------------------------------------------------
+
+/** Só devolve um id se o nome bate com EXATAMENTE um cliente (ambíguo ou inexistente = null). */
+async function resolverClienteIdPorNome(nome: string): Promise<string | null> {
+  for (const coluna of ["nome_razao_social", "nome_fantasia"] as const) {
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("id")
+      .eq(coluna, nome)
+      .eq("deletado", false)
+      .limit(2);
+    if (error) {
+      console.error("[resolverClienteIdPorNome] erro do Supabase:", error);
+      return null;
+    }
+    if (data?.length === 1) return data[0].id as string;
+    if ((data?.length ?? 0) > 1) return null;
+  }
+  return null;
+}
+
+export async function salvarAvaliacaoComplexidade(
+  payload: NovaAvaliacaoComplexidade
+): Promise<AvaliacaoComplexidade> {
+  const cliente_id = await resolverClienteIdPorNome(payload.cliente_nome);
+
+  const { data, error } = await supabase
+    .from("avaliacoes_complexidade")
+    .insert({ ...payload, cliente_id })
+    .select("*")
+    .single();
+  if (error) {
+    console.error("[salvarAvaliacaoComplexidade] erro do Supabase:", error);
+    throw new Error(error.message);
+  }
+  return data as AvaliacaoComplexidade;
+}
+
+export async function fetchAvaliacoesComplexidade(clienteNome: string): Promise<AvaliacaoComplexidade[]> {
+  const { data, error } = await supabase
+    .from("avaliacoes_complexidade")
+    .select("*")
+    .eq("cliente_nome", clienteNome)
+    .order("data_avaliacao", { ascending: true })
+    .order("created_at", { ascending: true })
+    .limit(200);
+  if (error) {
+    console.error("[fetchAvaliacoesComplexidade] erro do Supabase:", error);
+    throw new Error(error.message);
+  }
+  return (data ?? []) as AvaliacaoComplexidade[];
+}
+
+/** Sugestões do campo "Empresa / cliente": clientes cadastrados + nomes já avaliados antes. */
+export async function fetchNomesParaAvaliacao(): Promise<string[]> {
+  const [clientes, avaliacoes] = await Promise.all([
+    supabase
+      .from("clientes")
+      .select("nome_razao_social, nome_fantasia")
+      .eq("deletado", false)
+      .order("nome_razao_social", { ascending: true })
+      .limit(1000),
+    supabase.from("avaliacoes_complexidade").select("cliente_nome").limit(1000),
+  ]);
+
+  const nomes = new Set<string>();
+  for (const c of clientes.data ?? []) {
+    if (c.nome_razao_social) nomes.add(c.nome_razao_social as string);
+    if (c.nome_fantasia) nomes.add(c.nome_fantasia as string);
+  }
+  for (const a of avaliacoes.data ?? []) {
+    if (a.cliente_nome) nomes.add(a.cliente_nome as string);
+  }
+  return Array.from(nomes).sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+/**
+ * Chamado pelo formulário DEPOIS que o contrato é criado: amarra a avaliação
+ * ao contrato (e à empresa, quando o contrato já a tem) — antes disso nenhum
+ * dos dois existia, por isso form_id era só um token e não uma FK.
+ */
+export async function vincularAvaliacaoAoContrato(avaliacaoId: string, contratoId: string): Promise<void> {
+  const { data: contrato, error: erroContrato } = await supabase
+    .from("contratos")
+    .select("cliente_id")
+    .eq("id", contratoId)
+    .maybeSingle();
+  if (erroContrato) {
+    console.error("[vincularAvaliacaoAoContrato] erro ao ler contrato:", erroContrato);
+    throw new Error(erroContrato.message);
+  }
+
+  const { error } = await supabase
+    .from("avaliacoes_complexidade")
+    .update({ contrato_id: contratoId, ...(contrato?.cliente_id ? { cliente_id: contrato.cliente_id } : {}) })
+    .eq("id", avaliacaoId);
+  if (error) {
+    console.error("[vincularAvaliacaoAoContrato] erro do Supabase:", error);
+    throw new Error(error.message);
+  }
+}
+
+export function useSalvarAvaliacaoComplexidade() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: salvarAvaliacaoComplexidade,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["avaliacoes-complexidade"] });
+      queryClient.invalidateQueries({ queryKey: ["nomes-avaliacao"] });
+    },
+  });
+}
+
+export function useAvaliacoesComplexidade(clienteNome: string | null) {
+  return useQuery({
+    queryKey: ["avaliacoes-complexidade", clienteNome],
+    queryFn: () => fetchAvaliacoesComplexidade(clienteNome as string),
+    enabled: !!clienteNome,
+  });
+}
+
+export function useNomesParaAvaliacao() {
+  return useQuery({ queryKey: ["nomes-avaliacao"], queryFn: fetchNomesParaAvaliacao, staleTime: 60_000 });
 }

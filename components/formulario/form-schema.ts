@@ -112,6 +112,11 @@ export const formularioContratoSchema = z
     grau_dificuldade: z
       .enum(GRAUS_DIFICULDADE, { errorMap: () => ({ message: "Selecione o grau de dificuldade" }) })
       .default("MEDIO"),
+    // Preenchidos pela ferramenta Índice de Complexidade (nunca vão no payload do
+    // contrato): o id amarra a avaliação ao contrato depois do submit, o resumo
+    // é só o texto mostrado ao lado do Grau de Dificuldade.
+    avaliacao_complexidade_id: z.string().optional(),
+    avaliacao_complexidade_resumo: z.string().optional(),
     contexto_perfil_cliente: z.string().optional().or(z.literal("")),
     observacoes: z.string().optional().or(z.literal("")),
   })
@@ -304,6 +309,8 @@ export const valoresPadrao: FormularioContratoValues = {
   data_onboarding: "",
   consultora_id: "",
   grau_dificuldade: "MEDIO",
+  avaliacao_complexidade_id: undefined,
+  avaliacao_complexidade_resumo: undefined,
   contexto_perfil_cliente: "",
   observacoes: "",
 };

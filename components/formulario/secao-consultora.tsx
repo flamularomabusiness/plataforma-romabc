@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { useFormContext } from "react-hook-form";
+import { Gauge } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   FormField,
@@ -10,6 +12,7 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form";
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -24,6 +27,12 @@ import { useConsultoras } from "@/lib/queries";
 import { filtrarConsultorasPorProduto } from "@/lib/status-helper";
 import { cn } from "@/lib/utils";
 import { GRAUS_DIFICULDADE, type GrauDificuldade } from "@/lib/types";
+import {
+  CANAL_COMPLEXIDADE,
+  resumoResultado,
+  type MensagemComplexidade,
+} from "@/lib/ferramentas/indice-complexidade";
+import { aplicarResultadoComplexidade } from "./aplicar-complexidade";
 import type { FormularioContratoValues } from "./form-schema";
 
 const GRAU_OPCOES: Record<
@@ -66,6 +75,40 @@ export function SecaoConsultora() {
   const { data: consultoras, isLoading } = useConsultoras();
   const produtoId = form.watch("produto_id");
   const consultorasFiltradas = filtrarConsultorasPorProduto(consultoras ?? [], produtoId);
+
+  // Token que casa a avaliação feita na ferramenta (aba nova) com ESTE formulário.
+  const formIdRef = useRef<string | null>(null);
+  const resumoAvaliacao = form.watch("avaliacao_complexidade_resumo");
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const canal = new BroadcastChannel(CANAL_COMPLEXIDADE);
+    canal.onmessage = (evento: MessageEvent<MensagemComplexidade>) => {
+      const msg = evento.data;
+      if (msg?.tipo !== "complexidade:resultado" || !formIdRef.current || msg.form_id !== formIdRef.current) {
+        return;
+      }
+      aplicarResultadoComplexidade(form, msg);
+      toast.success(`Grau de Dificuldade preenchido pela avaliação — ${resumoResultado(msg)}`);
+    };
+    return () => canal.close();
+  }, [form]);
+
+  function avaliarComFerramenta() {
+    const nome = (
+      form.getValues("empresas.0.nome_fantasia") ||
+      form.getValues("empresas.0.nome_razao_social") ||
+      ""
+    ).trim();
+    formIdRef.current ??= crypto.randomUUID();
+    const params = new URLSearchParams({ form_id: formIdRef.current, redirect_to: "/formulario" });
+    if (nome) params.set("cliente", nome);
+    const plano = form.getValues("plano_contratado");
+    if (plano) params.set("plano", plano);
+    // Aba nova: o formulário (mesmo incompleto) fica intacto esperando o resultado
+    // — o rascunho em localStorage só é restaurado quando está válido.
+    window.open(`/ferramentas/indice-complexidade?${params.toString()}`, "_blank");
+  }
 
   // Trocar de produto pode tirar a consultora escolhida da lista filtrada —
   // ignora o mount inicial pra não apagar uma escolha restaurada do rascunho.
@@ -141,6 +184,15 @@ export function SecaoConsultora() {
                 })}
               </div>
             </FormControl>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <Button type="button" variant="outline" size="sm" onClick={avaliarComFerramenta}>
+                <Gauge className="mr-2 h-4 w-4" />
+                Avaliar com Ferramenta
+              </Button>
+              {resumoAvaliacao && (
+                <span className="text-xs text-muted-foreground">Sugerido pela ferramenta: {resumoAvaliacao}</span>
+              )}
+            </div>
             <FormMessage />
           </FormItem>
         )}

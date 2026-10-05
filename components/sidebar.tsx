@@ -13,6 +13,7 @@ import {
   Upload,
   User,
   Users,
+  Wrench,
   X,
 } from "lucide-react";
 
@@ -36,6 +37,7 @@ const ITENS_MENU: Array<{
     funcionalidade: "dashboard",
   },
   { href: "/painel/clientes", label: "Clientes", icon: Users, funcionalidade: "clientes" },
+  { href: "/ferramentas", label: "Ferramentas", icon: Wrench },
   {
     href: "/painel/importar-dados",
     label: "Importar Dados",
