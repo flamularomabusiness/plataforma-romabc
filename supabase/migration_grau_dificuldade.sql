@@ -135,4 +135,4 @@ begin
 end;
 $$;
 
-grant execute on function criar_contrato_completo(jsonb) to anon, authenticated;
+grant execute on function criar_contrato_completo(jsonb) to authenticated;

@@ -145,7 +145,7 @@ begin
 end;
 $$;
 
-grant execute on function criar_contrato_completo(jsonb) to anon, authenticated;
+grant execute on function criar_contrato_completo(jsonb) to authenticated;
 
 -- Confira: pessoas_cliente deve aparecer com rowsecurity = false.
 select tablename, rowsecurity from pg_tables where schemaname = 'public' and tablename = 'pessoas_cliente';

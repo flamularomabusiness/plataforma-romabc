@@ -114,7 +114,7 @@ begin
 end;
 $$;
 
-grant execute on function estender_cronograma_recorrente() to anon, authenticated;
+grant execute on function estender_cronograma_recorrente() to authenticated;
 
 -- Backfill imediato — estende todos os contratos recorrentes ativos já
 -- existentes até a janela-alvo atual. Roda select em vez de "perform" de

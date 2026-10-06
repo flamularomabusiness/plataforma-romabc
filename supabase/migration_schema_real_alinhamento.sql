@@ -139,7 +139,7 @@ begin
 end;
 $$;
 
-grant execute on function criar_contrato_completo(jsonb) to anon, authenticated;
+grant execute on function criar_contrato_completo(jsonb) to authenticated;
 
 -- Confira: unes deve aparecer com rowsecurity = false, e clientes deve ter
 -- as 3 colunas novas.

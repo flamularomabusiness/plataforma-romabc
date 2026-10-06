@@ -285,7 +285,7 @@ begin
 end;
 $$;
 
-grant execute on function criar_contrato_completo(jsonb) to anon, authenticated;
+grant execute on function criar_contrato_completo(jsonb) to authenticated;
 
 -- Confira depois de rodar:
 --   select column_name from information_schema.columns where table_name = 'clientes' and column_name = 'nome_fantasia';

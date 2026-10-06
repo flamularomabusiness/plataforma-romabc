@@ -398,4 +398,4 @@ begin
 end;
 $$;
 
-grant execute on function importar_dados_excel(jsonb) to anon, authenticated;
+grant execute on function importar_dados_excel(jsonb) to authenticated;

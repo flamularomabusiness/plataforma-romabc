@@ -342,7 +342,7 @@ begin
 end;
 $$;
 
-grant execute on function importar_dados_excel(jsonb) to anon, authenticated;
+grant execute on function importar_dados_excel(jsonb) to authenticated;
 
 -- Confira depois de rodar:
 --   select column_name from information_schema.columns where table_name = 'clientes' and column_name = 'nome_fantasia';

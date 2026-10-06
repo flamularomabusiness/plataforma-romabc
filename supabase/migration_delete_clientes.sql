@@ -177,9 +177,9 @@ begin
 end;
 $$;
 
-grant execute on function deletar_cliente_soft(uuid, text) to anon, authenticated;
-grant execute on function restaurar_cliente(uuid) to anon, authenticated;
-grant execute on function deletar_cliente_hard(uuid, text) to anon, authenticated;
+grant execute on function deletar_cliente_soft(uuid, text) to authenticated;
+grant execute on function restaurar_cliente(uuid) to authenticated;
+grant execute on function deletar_cliente_hard(uuid, text) to authenticated;
 
 -- Confira depois de rodar:
 --   select column_name from information_schema.columns where table_name = 'clientes' and column_name like 'deletado%';

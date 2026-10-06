@@ -129,7 +129,7 @@ begin
 end;
 $$;
 
-grant execute on function criar_contrato_completo(jsonb) to anon, authenticated;
+grant execute on function criar_contrato_completo(jsonb) to authenticated;
 
 -- Confira: contexto_perfil_cliente deve aparecer na lista de colunas de contratos.
 select column_name, data_type, is_nullable

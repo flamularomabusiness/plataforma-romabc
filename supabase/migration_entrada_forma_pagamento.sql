@@ -302,7 +302,7 @@ begin
 end;
 $$;
 
-grant execute on function criar_contrato_completo(jsonb) to anon, authenticated;
+grant execute on function criar_contrato_completo(jsonb) to authenticated;
 
 -- Confira depois de rodar:
 --   select column_name from information_schema.columns where table_name = 'pagamentos_projetados' and column_name in ('forma_pagamento','eh_entrada');

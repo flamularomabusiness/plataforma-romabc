@@ -190,7 +190,7 @@ begin
 end;
 $$;
 
-grant execute on function criar_contrato_completo(jsonb) to anon, authenticated;
+grant execute on function criar_contrato_completo(jsonb) to authenticated;
 
 -- Confira: contrato_empresas deve existir com rowsecurity = false, e o
 -- backfill deve ter 1+ linha (pelo menos o contrato de teste anterior).
