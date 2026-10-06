@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { supabase } from "@/lib/supabase";
+import { criarSupabaseServidor } from "@/lib/supabase-server";
 import { STATUS_CLIENTE, STATUS_PAGAMENTO } from "@/lib/types";
 import type { ImportarDadosResultado } from "@/lib/types";
 
@@ -64,6 +64,35 @@ const payloadSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // Esta rota está fora do middleware (matcher exclui api/), então ela mesma
+  // exige a sessão. A role vem da tabela usuarios, NÃO do body (usuarioRole
+  // no payload é só o que o cliente diz ser — qualquer um poderia mandar
+  // "administrator").
+  const supabase = await criarSupabaseServidor();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
+  const { data: linhaUsuario } = await supabase
+    .from("usuarios")
+    .select("role, ativo")
+    .eq("id", user.id)
+    .maybeSingle();
+  const usuarioRole = linhaUsuario?.role as string | undefined;
+
+  if (
+    linhaUsuario?.ativo === false ||
+    (usuarioRole !== "administrator" && usuarioRole !== "financeiro")
+  ) {
+    return NextResponse.json(
+      { error: "Apenas Administrador e Financeiro podem importar dados" },
+      { status: 403 }
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -88,14 +117,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Payload inválido", details: detalhes }, { status: 400 });
   }
 
-  const { usuarioRole, nomeArquivo, clientes, pagamentos } = parsed.data;
-
-  if (usuarioRole !== "administrator" && usuarioRole !== "financeiro") {
-    return NextResponse.json(
-      { error: "Apenas Administrador e Financeiro podem importar dados" },
-      { status: 403 }
-    );
-  }
+  const { nomeArquivo, clientes, pagamentos } = parsed.data;
 
   const umaHoraAtras = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const { count: importsRecentes, error: rateLimitError } = await supabase
