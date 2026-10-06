@@ -64,7 +64,6 @@ const config: Config = {
           foreground: "hsl(var(--card-foreground))",
         },
         brand: {
-          deep: "#04081C",
           primary: "#001C6B",
           secondary: "#244DD8",
           accent: "#5E8CFF",
@@ -75,7 +74,6 @@ const config: Config = {
       },
       backgroundImage: {
         "brand-gradient": "linear-gradient(135deg, #001C6B 0%, #244DD8 100%)",
-        "brand-gradient-deep": "linear-gradient(145deg, #04081C 0%, #001C6B 50%, #244DD8 100%)",
       },
       borderRadius: {
         lg: "var(--radius)",

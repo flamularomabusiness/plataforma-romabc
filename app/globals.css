@@ -94,50 +94,72 @@
   }
 }
 
-@layer utilities {
-  /* Força a paleta clara independente do tema ativo — usado no card do
-     login, que deve ficar sempre branco (o logo tem texto escuro fixo,
-     sem variante pra dark mode). As variáveis são lidas por qualquer
-     classe Tailwind (bg-background, text-foreground etc.) dentro deste
-     container, sobrepondo as do :root/.dark por cascata normal de CSS. */
-  .theme-force-light {
-    --background: 0 0% 100%;
-    --foreground: 222.2 47.4% 11.2%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 47.4% 11.2%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 47.4% 11.2%;
-    --primary: 224 100% 21%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 16% 90%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 220 18% 94%;
-    --muted-foreground: 215.4 16.3% 40%;
-    --accent: 223 100% 95%;
-    --accent-foreground: 224 100% 21%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 224 100% 21%;
-  }
+/* Formas desfocadas do fundo do login — flutuam devagar (ver app/login/page.tsx). */
+.login-blob {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  opacity: 0.25;
+  animation: login-flutuar 6s ease-in-out infinite;
+}
 
-  /* Linhas decorativas do login "fluindo" — dasharray grande com offset
-     animado dá a impressão de movimento contínuo ao longo da curva. */
-  .linha-fluxo {
-    stroke-dasharray: 18 14;
-    animation: fluxo-linha linear infinite;
-  }
+.login-blob-1 {
+  width: 500px;
+  height: 500px;
+  top: -150px;
+  left: -150px;
+  filter: blur(60px);
+  background: radial-gradient(circle at 30% 30%, rgba(36, 77, 216, 0.8), rgba(0, 28, 107, 0.3));
+}
 
-  @keyframes fluxo-linha {
-    to {
-      stroke-dashoffset: -256;
-    }
+.login-blob-2 {
+  width: 450px;
+  height: 450px;
+  bottom: -100px;
+  right: -100px;
+  filter: blur(60px);
+  animation-delay: 2s;
+  background: radial-gradient(circle at 70% 70%, rgba(94, 140, 255, 0.6), rgba(36, 77, 216, 0.2));
+}
+
+.login-blob-3 {
+  width: 350px;
+  height: 350px;
+  top: 30%;
+  right: 5%;
+  filter: blur(50px);
+  animation-delay: 4s;
+  background: radial-gradient(circle at 50% 50%, rgba(36, 77, 216, 0.5), rgba(94, 140, 255, 0.1));
+}
+
+.dark .login-blob {
+  opacity: 0.15;
+}
+
+.dark .login-blob-1 {
+  background: radial-gradient(circle at 30% 30%, rgba(94, 140, 255, 0.4), rgba(0, 28, 107, 0.1));
+}
+
+.dark .login-blob-2 {
+  background: radial-gradient(circle at 70% 70%, rgba(94, 140, 255, 0.3), rgba(36, 77, 216, 0.1));
+}
+
+.dark .login-blob-3 {
+  background: radial-gradient(circle at 50% 50%, rgba(94, 140, 255, 0.25), rgba(36, 77, 216, 0.05));
+}
+
+@keyframes login-flutuar {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(30px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .linha-fluxo {
+  .login-blob {
     animation: none;
   }
 }
