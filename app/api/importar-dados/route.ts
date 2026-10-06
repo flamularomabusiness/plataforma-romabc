@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { criarSupabaseServidor } from "@/lib/supabase-server";
+import { obterSessaoServidor } from "@/lib/supabase-server";
 import { STATUS_CLIENTE, STATUS_PAGAMENTO } from "@/lib/types";
 import type { ImportarDadosResultado } from "@/lib/types";
 
@@ -68,25 +68,13 @@ export async function POST(request: NextRequest) {
   // exige a sessão. A role vem da tabela usuarios, NÃO do body (usuarioRole
   // no payload é só o que o cliente diz ser — qualquer um poderia mandar
   // "administrator").
-  const supabase = await criarSupabaseServidor();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const sessao = await obterSessaoServidor();
+  if (!sessao.autenticado) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
+  const { supabase, role: usuarioRole } = sessao;
 
-  const { data: linhaUsuario } = await supabase
-    .from("usuarios")
-    .select("role, ativo")
-    .eq("id", user.id)
-    .maybeSingle();
-  const usuarioRole = linhaUsuario?.role as string | undefined;
-
-  if (
-    linhaUsuario?.ativo === false ||
-    (usuarioRole !== "administrator" && usuarioRole !== "financeiro")
-  ) {
+  if (!sessao.ativo || (usuarioRole !== "administrator" && usuarioRole !== "financeiro")) {
     return NextResponse.json(
       { error: "Apenas Administrador e Financeiro podem importar dados" },
       { status: 403 }

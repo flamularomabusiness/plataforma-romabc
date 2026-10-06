@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { criarSupabaseAdmin } from "@/lib/supabase-admin";
 
 const JOB_ATUALIZAR = "atualizar-pagamentos-projetados";
 const JOB_ESTENDER = "estender-cronograma-recorrente";
@@ -20,7 +21,7 @@ function autorizado(request: NextRequest): boolean {
  * cron_logs sob o job_nome dado — usado pelos dois jobs abaixo, que são
  * independentes entre si (um falhar não deve impedir o outro de rodar).
  */
-async function rodarJob(jobNome: string, rpcNome: string) {
+async function rodarJob(supabase: SupabaseClient, jobNome: string, rpcNome: string) {
   console.log(`[${jobNome}] iniciado`);
 
   const { data: quantidade, error } = await supabase.rpc(rpcNome);
@@ -50,12 +51,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
+  // Sem usuário logado num cron, então precisa da service-role key (o role
+  // anon perdeu acesso às tabelas — REVOKE por segurança).
+  let supabase: SupabaseClient;
+  try {
+    supabase = criarSupabaseAdmin();
+  } catch (error) {
+    const mensagem = error instanceof Error ? error.message : "Falha ao criar cliente admin";
+    console.error("[cron] " + mensagem);
+    return NextResponse.json({ success: false, error: mensagem }, { status: 500 });
+  }
+
   // Independentes de propósito: um bug na extensão do cronograma recorrente
   // não deve impedir a atualização de status (e vice-versa) — cada um loga
   // o próprio resultado em cron_logs.
   const [atualizarPagamentos, estenderCronograma] = await Promise.all([
-    rodarJob(JOB_ATUALIZAR, "atualizar_pagamentos_vencidos"),
-    rodarJob(JOB_ESTENDER, "estender_cronograma_recorrente"),
+    rodarJob(supabase, JOB_ATUALIZAR, "atualizar_pagamentos_vencidos"),
+    rodarJob(supabase, JOB_ESTENDER, "estender_cronograma_recorrente"),
   ]);
 
   // Cache do dashboard (KPIs, mês a mês) é 100% client-side via React Query,

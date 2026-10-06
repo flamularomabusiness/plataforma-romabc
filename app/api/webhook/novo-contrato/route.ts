@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { supabase } from "@/lib/supabase";
+import { obterSessaoServidor } from "@/lib/supabase-server";
 import {
   FORMAS_PAGAMENTO,
   FUNCOES_PESSOA,
@@ -148,6 +148,19 @@ const novoContratoPayloadSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // Fora do middleware (matcher exclui api/) — a rota exige a sessão por conta
+  // própria e roda o RPC COMO o usuário logado (role anon não tem privilégio
+  // nas tabelas). Qualquer usuário ativo pode criar contrato: as 3 roles têm
+  // a funcionalidade "formulario" (lib/auth.ts).
+  const sessao = await obterSessaoServidor();
+  if (!sessao.autenticado) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+  if (!sessao.ativo) {
+    return NextResponse.json({ error: "Usuário inativo" }, { status: 403 });
+  }
+  const { supabase } = sessao;
+
   let body: unknown;
   try {
     body = await request.json();

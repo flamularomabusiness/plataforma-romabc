@@ -31,3 +31,29 @@ export async function criarSupabaseServidor() {
     }
   );
 }
+
+/**
+ * Sessão da requisição + linha do usuário em `usuarios` (role/ativo). A role
+ * vem SEMPRE daqui — nunca do body da requisição. `ativo` é false também
+ * quando o usuário autenticado não tem linha em `usuarios`.
+ */
+export async function obterSessaoServidor() {
+  const supabase = await criarSupabaseServidor();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { supabase, autenticado: false as const };
+
+  const { data: linha } = await supabase
+    .from("usuarios")
+    .select("role, ativo")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return {
+    supabase,
+    autenticado: true as const,
+    role: linha?.role as string | undefined,
+    ativo: !!linha && linha.ativo !== false,
+  };
+}
