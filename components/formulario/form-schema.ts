@@ -73,7 +73,13 @@ export const formularioContratoSchema = z
     tipo_pagamento: z.enum(TIPOS_PAGAMENTO, {
       errorMap: () => ({ message: "Selecione o tipo de pagamento" }),
     }),
-    plano_contratado: z.string().min(1, "Selecione um plano"),
+    // Só é obrigatório quando o produto escolhido TEM planos (ex.: CFO Mentoria
+    // não tem nenhum). O schema não enxerga o banco, então a SecaoPagamento
+    // mantém plano_obrigatorio em sincronia com os planos do produto e o
+    // superRefine abaixo cobra o plano. Nenhum dos dois campos de controle
+    // vai pro payload do contrato (app/formulario/page.tsx monta ele à mão).
+    plano_contratado: z.string(),
+    plano_obrigatorio: z.boolean().optional(),
 
     // Recorrente
     valor_mensal: z.number().nonnegative("Informe um valor válido").optional(),
@@ -121,6 +127,14 @@ export const formularioContratoSchema = z
     observacoes: z.string().optional().or(z.literal("")),
   })
   .superRefine((data, ctx) => {
+    if (data.plano_obrigatorio && !data.plano_contratado) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione um plano",
+        path: ["plano_contratado"],
+      });
+    }
+
     const principais = data.pessoas.filter((p) => p.eh_principal);
     if (principais.length > 1) {
       ctx.addIssue({
@@ -294,6 +308,7 @@ export const valoresPadrao: FormularioContratoValues = {
   pessoas: [{ ...pessoaVazia, eh_principal: true }],
   tipo_pagamento: "recorrente",
   plano_contratado: "",
+  plano_obrigatorio: false,
   valor_mensal: 0,
   data_vencimento_mensal: 5,
   data_pagamento_unico: "",

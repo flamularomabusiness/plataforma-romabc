@@ -47,7 +47,7 @@ const novoContratoPayloadSchema = z.object({
   pagamento: z
     .object({
       tipo_pagamento: z.enum(TIPOS_PAGAMENTO),
-      plano_contratado: z.string().min(1),
+      plano_contratado: z.string(),
       // Recorrente
       valor_mensal: z.number().positive().optional(),
       data_inicio_primeiro_pagamento: z.string().min(1).optional(),
@@ -174,6 +174,25 @@ export async function POST(request: NextRequest) {
       { error: "Payload inválido", details: parsed.error.flatten() },
       { status: 400 }
     );
+  }
+
+  // Plano é opcional no payload (CFO Mentoria, por ex., não tem planos), mas
+  // obrigatório quando o produto TEM planos — o formulário já cobra isso, aqui
+  // só impede que uma chamada direta pule a regra.
+  if (!parsed.data.pagamento.plano_contratado) {
+    const { count, error: erroPlanos } = await supabase
+      .from("produto_planos")
+      .select("id", { count: "exact", head: true })
+      .eq("produto_id", parsed.data.produto_id)
+      .eq("ativo", true);
+    if (erroPlanos) {
+      console.error("[novo-contrato] erro ao checar planos do produto:", erroPlanos);
+    } else if ((count ?? 0) > 0) {
+      return NextResponse.json(
+        { error: "Payload inválido", details: "Selecione um plano: este produto possui planos" },
+        { status: 400 }
+      );
+    }
   }
 
   const { data, error } = (await supabase.rpc("criar_contrato_completo", {

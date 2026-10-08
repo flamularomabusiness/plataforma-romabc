@@ -43,6 +43,14 @@ export function SecaoPagamento() {
   const produtoId = form.watch("produto_id");
   const { data: planos, isLoading: loadingPlanos } = useProdutoPlanos(produtoId);
 
+  // Plano só é obrigatório pra produto que tem planos (ver form-schema.ts).
+  const temPlanos = !!produtoId && (planos ?? []).length > 0;
+  useEffect(() => {
+    if (loadingPlanos) return;
+    form.setValue("plano_obrigatorio", temPlanos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingPlanos, temPlanos]);
+
   // Trocar de produto invalida o plano escolhido (planos são por produto) —
   // ignora o mount inicial pra não apagar um plano restaurado do rascunho.
   const produtoIdMontagem = useRef(produtoId);
@@ -85,7 +93,7 @@ export function SecaoPagamento() {
           name="plano_contratado"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Plano Contratado *</FormLabel>
+              <FormLabel>Plano Contratado{temPlanos ? " *" : ""}</FormLabel>
               {loadingPlanos ? (
                 <Skeleton className="h-10 w-full" />
               ) : (
@@ -98,7 +106,11 @@ export function SecaoPagamento() {
                     <SelectTrigger>
                       <SelectValue
                         placeholder={
-                          produtoId ? "Selecione o plano" : "Selecione um produto primeiro"
+                          !produtoId
+                            ? "Selecione um produto primeiro"
+                            : temPlanos
+                              ? "Selecione o plano"
+                              : "Este produto não possui planos"
                         }
                       />
                     </SelectTrigger>
