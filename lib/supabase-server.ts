@@ -46,13 +46,16 @@ export async function obterSessaoServidor() {
 
   const { data: linha } = await supabase
     .from("usuarios")
-    .select("role, ativo")
+    .select("role, ativo, nome")
     .eq("id", user.id)
     .maybeSingle();
 
   return {
     supabase,
     autenticado: true as const,
+    userId: user.id,
+    email: user.email ?? null,
+    nome: (linha?.nome as string | null | undefined) ?? null,
     role: linha?.role as string | undefined,
     ativo: !!linha && linha.ativo !== false,
   };

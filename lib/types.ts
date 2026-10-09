@@ -534,3 +534,19 @@ export interface ContratoDocumento {
   uploaded_by: string;
   data_criacao: string;
 }
+
+export type TipoNotificacaoEmail = "NOVO_CONTRATO_FINANCEIRO" | "NOVO_CONTRATO_RESPONSAVEL";
+export type StatusNotificacaoEmail = "ENVIADO" | "ERRO" | "IGNORADO";
+
+/** Linha de public.notificacoes_email — supabase/migration_notificacoes_email.sql. */
+export interface NotificacaoEmail {
+  id: string;
+  contrato_id: string | null;
+  cliente_id: string | null;
+  tipo: TipoNotificacaoEmail;
+  destinatarios: string[];
+  assunto: string;
+  status: StatusNotificacaoEmail;
+  erro: string | null;
+  created_at: string;
+}

@@ -28,6 +28,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { CardEmpresasContrato } from "@/components/clientes/card-empresas-contrato";
 import { CardDocumentos } from "@/components/clientes/card-documentos";
 import { CardContextoContrato } from "@/components/clientes/card-contexto-contrato";
+import { CardNotificacoesEmail } from "@/components/clientes/card-notificacoes-email";
 import { DialogEditarPagamento } from "@/components/clientes/dialog-editar-pagamento";
 import { useClienteDetalhes } from "@/lib/queries";
 import { podeAcessar, useUserRole } from "@/lib/auth";
@@ -494,6 +495,8 @@ export default function ClienteDetalhesPage() {
           )}
         </CardContent>
       </Card>
+
+      <CardNotificacoesEmail contratoIds={cliente.contratos.map((c) => c.id)} />
 
       <Card>
         <CardHeader>

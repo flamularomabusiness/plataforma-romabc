@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { obterSessaoServidor } from "@/lib/supabase-server";
+import { notificarNovoContrato } from "@/lib/notificacoes";
 import {
   FORMAS_PAGAMENTO,
   FUNCOES_PESSOA,
@@ -205,6 +206,20 @@ export async function POST(request: NextRequest) {
       { error: "Erro ao criar contrato", details: error.message },
       { status: 500 }
     );
+  }
+
+  // E-mails de "novo contrato" (Financeiro + Responsável): depois da resposta,
+  // pra não atrasar o usuário, e só aqui — a importação Excel não passa por
+  // esta rota. notificarNovoContrato() nunca lança: falha de e-mail não afeta
+  // o contrato, só vira linha ERRO em notificacoes_email.
+  if (data?.contrato_id && data.cliente_id) {
+    const entrada = {
+      contratoId: data.contrato_id,
+      clienteId: data.cliente_id,
+      payload: parsed.data,
+      cadastradoPor: sessao.nome || sessao.email || "usuário não identificado",
+    };
+    after(() => notificarNovoContrato(entrada));
   }
 
   return NextResponse.json({ success: true, ...data }, { status: 201 });

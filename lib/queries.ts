@@ -32,6 +32,7 @@ import {
   MensalidadeClienteLinha,
   MensalidadesPorClienteResultado,
   MesDashboard,
+  NotificacaoEmail,
   NovoContratoPayload,
   PagamentoAVistaCliente,
   PagamentoDoMes,
@@ -2054,4 +2055,31 @@ export function useAvaliacoesComplexidade(clienteNome: string | null) {
 
 export function useNomesParaAvaliacao() {
   return useQuery({ queryKey: ["nomes-avaliacao"], queryFn: fetchNomesParaAvaliacao, staleTime: 60_000 });
+}
+
+// ---------------------------------------------------------------------------
+// Histórico de e-mails de notificação (só administrator/financeiro leem — RLS).
+// ---------------------------------------------------------------------------
+
+export async function fetchNotificacoesEmail(contratoIds: string[]): Promise<NotificacaoEmail[]> {
+  if (contratoIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("notificacoes_email")
+    .select("*")
+    .in("contrato_id", contratoIds)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) {
+    console.error("[fetchNotificacoesEmail] erro do Supabase:", error);
+    throw new Error(error.message);
+  }
+  return (data ?? []) as NotificacaoEmail[];
+}
+
+export function useNotificacoesEmail(contratoIds: string[], habilitado: boolean) {
+  return useQuery({
+    queryKey: ["notificacoes-email", contratoIds],
+    queryFn: () => fetchNotificacoesEmail(contratoIds),
+    enabled: habilitado && contratoIds.length > 0,
+  });
 }
