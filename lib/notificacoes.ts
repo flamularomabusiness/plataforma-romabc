@@ -146,6 +146,51 @@ async function enviarERegistrar(
   }
 }
 
+interface ConsultoraParaAviso {
+  nome: string;
+  email: string | null;
+  usuario_id: string | null;
+}
+
+/**
+ * Pra onde vai o aviso do responsável. Mesma regra do Financeiro: o e-mail da
+ * CONTA (usuarios.email, o que a pessoa cadastrou ao criar o login), via o
+ * vínculo consultoras.usuario_id feito por um administrador. Conta desativada
+ * não recebe. Consultora ainda sem conta vinculada cai no e-mail antigo de
+ * consultoras.email, pra ninguém ficar sem aviso durante a transição.
+ */
+async function destinoDoResponsavel(
+  admin: SupabaseClient,
+  consultora: ConsultoraParaAviso | null
+): Promise<{ emails: string[]; motivoSemDestinatario: string }> {
+  if (!consultora) {
+    return { emails: [], motivoSemDestinatario: "Consultora do contrato não encontrada" };
+  }
+
+  if (consultora.usuario_id) {
+    const { data: conta } = await admin
+      .from("usuarios")
+      .select("email, ativo")
+      .eq("id", consultora.usuario_id)
+      .maybeSingle();
+    if (!conta?.ativo) {
+      return {
+        emails: [],
+        motivoSemDestinatario: `Conta vinculada à consultora "${consultora.nome}" está desativada`,
+      };
+    }
+    return {
+      emails: emailsUnicos([conta.email as string | null]),
+      motivoSemDestinatario: `Conta vinculada à consultora "${consultora.nome}" sem e-mail`,
+    };
+  }
+
+  return {
+    emails: emailsUnicos([consultora.email]),
+    motivoSemDestinatario: `Consultora "${consultora.nome}" sem conta vinculada e sem e-mail cadastrado`,
+  };
+}
+
 /**
  * Dispara os 2 e-mails de "novo contrato" (Financeiro + Responsável) e
  * registra cada um em notificacoes_email. NUNCA lança: o contrato já foi
@@ -160,7 +205,7 @@ export async function notificarNovoContrato(entrada: EntradaNotificacao): Promis
     const [produto, une, consultora, usuarios] = await Promise.all([
       admin.from("produtos").select("nome").eq("id", payload.produto_id).maybeSingle(),
       admin.from("unes").select("nome").eq("id", payload.une_id).maybeSingle(),
-      admin.from("consultoras").select("nome, email").eq("id", payload.consultora_id).maybeSingle(),
+      admin.from("consultoras").select("nome, email, usuario_id").eq("id", payload.consultora_id).maybeSingle(),
       // Só usuários ATIVOS recebem. O e-mail vem de public.usuarios (preenchido pelo trigger no cadastro).
       admin.from("usuarios").select("email").eq("ativo", true).in("role", ROLES_FINANCEIRO),
     ]);
@@ -201,15 +246,14 @@ export async function notificarNovoContrato(entrada: EntradaNotificacao): Promis
       grauDificuldade: grau ? GRAU_DIFICULDADE_LABELS[grau] : undefined,
       contexto: payload.contexto_perfil_cliente,
     });
+    const destino = await destinoDoResponsavel(admin, consultora.data);
     await enviarERegistrar(
       admin,
       entrada,
       "NOVO_CONTRATO_RESPONSAVEL",
-      emailsUnicos([consultora.data?.email as string | null | undefined]),
+      destino.emails,
       responsavel,
-      consultora.data
-        ? `Consultora "${consultora.data.nome}" sem e-mail cadastrado`
-        : "Consultora do contrato não encontrada"
+      destino.motivoSemDestinatario
     );
   } catch (error) {
     console.error("[notificacoes] falha inesperada ao notificar novo contrato:", error);

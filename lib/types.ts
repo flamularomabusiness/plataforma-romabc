@@ -103,6 +103,8 @@ export interface Consultora {
   email: string | null;
   /** Produtos que essa pessoa atende — array vazio = aparece pra qualquer produto. */
   produtos: string[];
+  /** Conta de login vinculada (supabase/migration_consultoras_usuario.sql) — define pra onde vai o aviso de novo contrato. */
+  usuario_id: string | null;
 }
 
 export interface Cliente {

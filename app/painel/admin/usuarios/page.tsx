@@ -33,13 +33,18 @@ import {
 } from "@/lib/auth";
 import {
   useAtualizarRoleUsuario,
+  useConsultoras,
   useDesativarUsuario,
   useReativarUsuario,
   useUsuarios,
+  useVincularConsultoraUsuario,
 } from "@/lib/queries";
 import { formatDate } from "@/lib/utils";
 
 type FiltroRole = "TODOS" | UserRole;
+
+// Radix Select não aceita value="" num item, então "sem consultora" tem sentinela.
+const SEM_CONSULTORA = "NENHUMA";
 
 export default function AdminUsuariosPage() {
   const router = useRouter();
@@ -56,6 +61,8 @@ export default function AdminUsuariosPage() {
   const atualizarRole = useAtualizarRoleUsuario();
   const desativar = useDesativarUsuario();
   const reativar = useReativarUsuario();
+  const { data: consultoras } = useConsultoras();
+  const vincular = useVincularConsultoraUsuario();
 
   if (acesso !== "liberado") {
     return (
@@ -76,6 +83,18 @@ export default function AdminUsuariosPage() {
       toast.success(`Role atualizada para ${ROLE_LABELS[novaRole]}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao atualizar role");
+    }
+  }
+
+  async function handleVincular(usuarioId: string, valor: string) {
+    try {
+      await vincular.mutateAsync({
+        usuarioId,
+        consultoraId: valor === SEM_CONSULTORA ? null : valor,
+      });
+      toast.success(valor === SEM_CONSULTORA ? "Vínculo removido" : "Consultora vinculada");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao vincular consultora");
     }
   }
 
@@ -103,7 +122,8 @@ export default function AdminUsuariosPage() {
       <div>
         <h1 className="text-2xl font-bold">Gerenciar Usuários</h1>
         <p className="text-muted-foreground">
-          Promova, rebaixe ou desative o acesso de quem usa o sistema.
+          Promova, rebaixe ou desative o acesso de quem usa o sistema. Vincule cada consultora à
+          sua conta: o aviso de novo cliente vai para o e-mail com que ela criou o login.
         </p>
       </div>
 
@@ -138,6 +158,7 @@ export default function AdminUsuariosPage() {
                 <TableRow>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Consultora</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Criado em</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -146,7 +167,7 @@ export default function AdminUsuariosPage() {
               <TableBody>
                 {usuariosFiltrados.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
                       Nenhum usuário encontrado.
                     </TableCell>
                   </TableRow>
@@ -176,6 +197,30 @@ export default function AdminUsuariosPage() {
                                   {ROLE_LABELS[role]}
                                 </SelectItem>
                               ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={
+                              (consultoras ?? []).find((c) => c.usuario_id === usuario.id)?.id ??
+                              SEM_CONSULTORA
+                            }
+                            disabled={vincular.isPending}
+                            onValueChange={(v) => handleVincular(usuario.id, v)}
+                          >
+                            <SelectTrigger className="w-48">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={SEM_CONSULTORA}>Nenhuma</SelectItem>
+                              {(consultoras ?? [])
+                                .filter((c) => !c.usuario_id || c.usuario_id === usuario.id)
+                                .map((c) => (
+                                  <SelectItem key={c.id} value={c.id}>
+                                    {c.nome}
+                                  </SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
                         </TableCell>

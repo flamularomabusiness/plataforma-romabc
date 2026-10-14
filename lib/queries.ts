@@ -2083,3 +2083,27 @@ export function useNotificacoesEmail(contratoIds: string[], habilitado: boolean)
     enabled: habilitado && contratoIds.length > 0,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Vínculo consultora <-> conta de login (só administrator; checado na própria RPC).
+// ---------------------------------------------------------------------------
+
+export async function vincularConsultoraUsuario(usuarioId: string, consultoraId: string | null) {
+  const { error } = await supabase.rpc("vincular_consultora_usuario", {
+    p_usuario_id: usuarioId,
+    p_consultora_id: consultoraId,
+  });
+  if (error) {
+    console.error("[vincularConsultoraUsuario] erro do Supabase:", error);
+    throw new Error(error.message);
+  }
+}
+
+export function useVincularConsultoraUsuario() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ usuarioId, consultoraId }: { usuarioId: string; consultoraId: string | null }) =>
+      vincularConsultoraUsuario(usuarioId, consultoraId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["consultoras"] }),
+  });
+}
