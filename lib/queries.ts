@@ -358,6 +358,8 @@ async function fetchKPIsImpl(): Promise<KPIs> {
   // contrato ativo com graus diferentes, prevalece o mais severo (ALTO > MEDIO > BAIXO).
   const grauPorCliente = new Map<string, GrauDificuldade>();
   for (const contrato of contratosAtivos as any[]) {
+    // Grau é opcional: contrato sem grau não entra em nenhum balde.
+    if (!contrato.grau_dificuldade) continue;
     const grauAtual = grauPorCliente.get(contrato.cliente_id);
     const grauContrato = contrato.grau_dificuldade as GrauDificuldade;
     if (!grauAtual || SEVERIDADE_GRAU[grauContrato] > SEVERIDADE_GRAU[grauAtual]) {
@@ -475,11 +477,22 @@ export async function criarContrato(payload: NovoContratoPayload) {
     body: JSON.stringify(payload),
   });
 
-  const json = await response.json();
-  if (!response.ok) {
-    throw new Error(json?.error ?? "Erro ao criar contrato");
+  // Corpo pode não ser JSON (ex.: 502/504 HTML da Vercel) — sem o catch o erro
+  // virava "Unexpected token <", que não diz nada.
+  let json: { error?: string; details?: unknown; contrato_id?: string; cliente_id?: string } | null = null;
+  try {
+    json = await response.json();
+  } catch {
+    json = null;
   }
-  return json;
+  if (!response.ok) {
+    console.error("[criarContrato] falha ao criar contrato:", { status: response.status, resposta: json });
+    const motivo = [json?.error, typeof json?.details === "string" ? json.details : null]
+      .filter(Boolean)
+      .join(" — ");
+    throw new Error(motivo || `Erro ao criar contrato (HTTP ${response.status})`);
+  }
+  return json as { success: boolean; contrato_id: string; cliente_id: string };
 }
 
 export async function importarDadosExcel(payload: {
@@ -680,7 +693,7 @@ export interface AtualizarContratoPayload {
   valor_mensal?: number;
   valor_total?: number;
   data_vencimento_mensal?: number;
-  grau_dificuldade?: GrauDificuldade;
+  grau_dificuldade?: GrauDificuldade | null;
   status?: StatusContrato;
   numero_empresas?: number;
   /** Só informativo — não recalcula pagamentos_projetados (já gerados na criação do contrato). */

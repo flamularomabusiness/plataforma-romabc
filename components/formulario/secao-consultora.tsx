@@ -158,7 +158,9 @@ export function SecaoConsultora() {
         name="grau_dificuldade"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Grau de Dificuldade</FormLabel>
+            <FormLabel>
+              Grau de Dificuldade <span className="font-normal text-muted-foreground">(opcional)</span>
+            </FormLabel>
             <FormControl>
               <div className="flex flex-col gap-2 sm:flex-row" role="radiogroup" aria-label="Grau de Dificuldade">
                 {GRAUS_DIFICULDADE.map((grau) => {
@@ -170,7 +172,8 @@ export function SecaoConsultora() {
                       type="button"
                       role="radio"
                       aria-checked={selecionado}
-                      onClick={() => field.onChange(grau)}
+                      // Clicar de novo no selecionado limpa (grau é opcional).
+                      onClick={() => field.onChange(selecionado ? undefined : grau)}
                       className={cn(
                         "flex-1 rounded-md border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                         selecionado

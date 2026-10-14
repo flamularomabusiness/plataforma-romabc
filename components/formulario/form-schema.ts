@@ -115,9 +115,9 @@ export const formularioContratoSchema = z
 
     // Consultora, grau, contexto e observações
     consultora_id: z.string().min(1, "Selecione a consultora responsável"),
-    grau_dificuldade: z
-      .enum(GRAUS_DIFICULDADE, { errorMap: () => ({ message: "Selecione o grau de dificuldade" }) })
-      .default("MEDIO"),
+    // Opcional (ex.: Mentoria não tem grau). Sem valor, o contrato fica com
+    // grau NULL ("Não informado") — ver migration_grau_dificuldade_opcional.sql.
+    grau_dificuldade: z.enum(GRAUS_DIFICULDADE).optional(),
     // Preenchidos pela ferramenta Índice de Complexidade (nunca vão no payload do
     // contrato): o id amarra a avaliação ao contrato depois do submit, o resumo
     // é só o texto mostrado ao lado do Grau de Dificuldade.
@@ -323,7 +323,7 @@ export const valoresPadrao: FormularioContratoValues = {
   data_inicio_consultoria: "",
   data_onboarding: "",
   consultora_id: "",
-  grau_dificuldade: "MEDIO",
+  grau_dificuldade: undefined,
   avaliacao_complexidade_id: undefined,
   avaliacao_complexidade_resumo: undefined,
   contexto_perfil_cliente: "",

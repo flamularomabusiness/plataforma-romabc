@@ -66,14 +66,22 @@ export const GRAU_DIFICULDADE_LABELS: Record<GrauDificuldade, string> = {
   ALTO: "Alto",
 };
 
+/** Grau é opcional (ex.: Mentoria): sem valor, mostra "Não informado" em vez de um badge vazio. */
+export function labelGrauDificuldade(grau: GrauDificuldade | null | undefined): string {
+  return grau ? GRAU_DIFICULDADE_LABELS[grau] : "Não informado";
+}
+
 /**
  * BAIXO/MEDIO/ALTO mapeiam 1:1 para as variantes success/warning/destructive
  * do Badge, que já usam as cores #10B981/#F59E0B/#EF4444 do design system.
  */
 export function getGrauDificuldadeBadgeVariant(
-  grau: GrauDificuldade
-): "success" | "warning" | "destructive" {
+  grau: GrauDificuldade | null | undefined
+): "success" | "warning" | "destructive" | "neutral" {
   switch (grau) {
+    case null:
+    case undefined:
+      return "neutral";
     case "BAIXO":
       return "success";
     case "MEDIO":

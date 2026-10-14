@@ -206,7 +206,8 @@ export interface Contrato {
   plano_contratado: string;
   recorrente: boolean;
   status: StatusContrato;
-  grau_dificuldade: GrauDificuldade;
+  /** null = não informado (opcional — ex.: Mentoria). Ver supabase/migration_grau_dificuldade_opcional.sql. */
+  grau_dificuldade: GrauDificuldade | null;
   data_criacao: string;
   data_atualizacao: string;
 }

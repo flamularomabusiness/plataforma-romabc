@@ -171,10 +171,9 @@ export async function POST(request: NextRequest) {
 
   const parsed = novoContratoPayloadSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Payload inválido", details: parsed.error.flatten() },
-      { status: 400 }
-    );
+    const detalhes = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+    console.error("[novo-contrato] payload inválido (400):", detalhes);
+    return NextResponse.json({ error: "Payload inválido", details: detalhes }, { status: 400 });
   }
 
   // Plano é opcional no payload (CFO Mentoria, por ex., não tem planos), mas
@@ -196,16 +195,26 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { data, error } = (await supabase.rpc("criar_contrato_completo", {
-    payload: parsed.data,
-  })) as { data: CriarContratoRPCResult | null; error: { message: string } | null };
+  type ErroRpc = { message: string; code?: string; details?: string; hint?: string };
+  let data: CriarContratoRPCResult | null = null;
+  let error: ErroRpc | null = null;
+  try {
+    ({ data, error } = (await supabase.rpc("criar_contrato_completo", {
+      payload: parsed.data,
+    })) as { data: CriarContratoRPCResult | null; error: ErroRpc | null });
+  } catch (excecao) {
+    error = { message: excecao instanceof Error ? excecao.message : String(excecao) };
+  }
 
   if (error) {
-    console.error("[novo-contrato] erro ao criar contrato completo:", error);
-    return NextResponse.json(
-      { error: "Erro ao criar contrato", details: error.message },
-      { status: 500 }
+    // Log completo (code/details/hint do Postgres) pros logs da Vercel; o
+    // usuário recebe a mensagem + code pra dar pra diagnosticar sem abrir o log.
+    console.error(
+      "[novo-contrato] erro ao criar contrato completo:",
+      JSON.stringify({ ...error, produto_id: parsed.data.produto_id, une_id: parsed.data.une_id, tipo_pagamento: parsed.data.pagamento.tipo_pagamento })
     );
+    const detalhe = error.code ? `${error.message} (código ${error.code})` : error.message;
+    return NextResponse.json({ error: "Erro ao criar contrato", details: detalhe }, { status: 500 });
   }
 
   // E-mails de "novo contrato" (Financeiro + Responsável): depois da resposta,
@@ -219,7 +228,12 @@ export async function POST(request: NextRequest) {
       payload: parsed.data,
       cadastradoPor: sessao.nome || sessao.email || "usuário não identificado",
     };
-    after(() => notificarNovoContrato(entrada));
+    try {
+      after(() => notificarNovoContrato(entrada));
+    } catch (erroAgendamento) {
+      // Agendar o e-mail nunca pode derrubar a resposta: o contrato já foi criado.
+      console.error("[novo-contrato] não consegui agendar os e-mails de notificação:", erroAgendamento);
+    }
   }
 
   return NextResponse.json({ success: true, ...data }, { status: 201 });

@@ -36,7 +36,7 @@ import {
   cn,
   formatBRL,
   formatDate,
-  GRAU_DIFICULDADE_LABELS,
+  labelGrauDificuldade,
   getGrauDificuldadeBadgeVariant,
 } from "@/lib/utils";
 import {
@@ -444,7 +444,7 @@ export default function ClienteDetalhesPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={getGrauDificuldadeBadgeVariant(contrato.grau_dificuldade)}>
-                        {GRAU_DIFICULDADE_LABELS[contrato.grau_dificuldade]}
+                        {labelGrauDificuldade(contrato.grau_dificuldade)}
                       </Badge>
                     </TableCell>
                   </TableRow>

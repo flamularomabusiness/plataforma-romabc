@@ -29,16 +29,21 @@ import {
   formatDate,
   getGrauDificuldadeBadgeVariant,
   GRAU_DIFICULDADE_LABELS,
+  labelGrauDificuldade,
 } from "@/lib/utils";
 import {
   GRAUS_DIFICULDADE,
   type ClienteDetalhes,
+  type GrauDificuldade,
   type StatusContrato,
   type TipoPagamento,
 } from "@/lib/types";
 import { maskCurrencyToNumber, formatCurrencyInput } from "@/lib/masks";
 
 type Contrato = ClienteDetalhes["contratos"][number];
+
+// Radix Select não aceita value="" num item — sentinela pro "Não informado".
+const SEM_GRAU = "NAO_INFORMADO";
 
 const STATUS_CONTRATO_EDITAVEL: StatusContrato[] = ["ativo", "inativo", "cancelado"];
 
@@ -280,15 +285,19 @@ export function TabelaContratosEditavel({
                 <TableCell>
                   {emEdicao ? (
                     <Select
-                      value={form.grau_dificuldade}
+                      value={form.grau_dificuldade ?? SEM_GRAU}
                       onValueChange={(v) =>
-                        setForm((f) => ({ ...f, grau_dificuldade: v as typeof f.grau_dificuldade }))
+                        setForm((f) => ({
+                          ...f,
+                          grau_dificuldade: v === SEM_GRAU ? null : (v as GrauDificuldade),
+                        }))
                       }
                     >
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger className="w-36">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value={SEM_GRAU}>Não informado</SelectItem>
                         {GRAUS_DIFICULDADE.map((grau) => (
                           <SelectItem key={grau} value={grau}>
                             {GRAU_DIFICULDADE_LABELS[grau]}
@@ -298,7 +307,7 @@ export function TabelaContratosEditavel({
                     </Select>
                   ) : (
                     <Badge variant={getGrauDificuldadeBadgeVariant(contrato.grau_dificuldade)}>
-                      {GRAU_DIFICULDADE_LABELS[contrato.grau_dificuldade]}
+                      {labelGrauDificuldade(contrato.grau_dificuldade)}
                     </Badge>
                   )}
                 </TableCell>

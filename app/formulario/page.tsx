@@ -167,21 +167,32 @@ export default function FormularioPage() {
       observacoes: values.observacoes || null,
     };
 
+    let resultado: Awaited<ReturnType<typeof criarContrato.mutateAsync>>;
     try {
-      const resultado = await criarContrato.mutateAsync(payload);
-      toast.success("Contrato criado com sucesso!");
+      resultado = await criarContrato.mutateAsync(payload);
+    } catch (error) {
+      // A mensagem já traz o motivo real devolvido pela rota (ver criarContrato em lib/queries.ts).
+      console.error("[formulario] contrato NÃO foi criado:", error);
+      toast.error(error instanceof Error ? error.message : "Erro ao criar contrato", { duration: 10_000 });
+      return;
+    }
 
+    toast.success("Contrato criado com sucesso!");
+
+    // Daqui pra baixo o contrato JÁ existe: nada disso pode virar "erro ao criar".
+    try {
       await enviarDocumentosPendentes(resultado?.contrato_id);
       await vincularAvaliacao(values.avaliacao_complexidade_id, resultado?.contrato_id);
-
-      window.localStorage.removeItem(RASCUNHO_KEY);
-      setArquivosEmpresa([]);
-      setArquivosCliente([]);
-      form.reset(valoresPadrao);
-      router.push(redirectPathAfterFormulario());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao criar contrato");
+      console.error("[formulario] contrato criado, mas um passo posterior falhou:", error);
+      toast.warning("Contrato criado, mas um passo posterior (documentos/avaliação) falhou. Confira na tela do cliente.");
     }
+
+    window.localStorage.removeItem(RASCUNHO_KEY);
+    setArquivosEmpresa([]);
+    setArquivosCliente([]);
+    form.reset(valoresPadrao);
+    router.push(redirectPathAfterFormulario());
   }
 
   // O contrato só existe depois de criarContrato() retornar — os arquivos
@@ -225,9 +236,17 @@ export default function FormularioPage() {
     }
   }
 
-  const podeEnviar =
-    !criarContrato.isPending &&
-    !(form.formState.isSubmitted && !form.formState.isValid);
+  // O botão só trava enquanto envia. Antes ele também travava depois de uma
+  // tentativa inválida até `isValid` voltar a true — mas `isValid` só é
+  // recalculado quando um campo muda, então corrigir algo por fora (ex.: o
+  // plano deixar de ser obrigatório ao trocar de produto) deixava o botão
+  // morto até mexer em qualquer outro campo. Quem valida é o handleSubmit.
+  const podeEnviar = !criarContrato.isPending;
+
+  function aoInvalidar(erros: unknown) {
+    console.warn("[formulario] envio bloqueado pela validação:", erros);
+    toast.error("Revise os campos destacados em vermelho antes de enviar.");
+  }
 
   return (
     <main className="min-h-screen bg-muted/30">
@@ -240,7 +259,7 @@ export default function FormularioPage() {
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
+          <form onSubmit={form.handleSubmit(onSubmit, aoInvalidar)} className="flex flex-col gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Produto/Serviço e UNE</CardTitle>

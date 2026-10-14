@@ -48,6 +48,9 @@ export function SecaoPagamento() {
   useEffect(() => {
     if (loadingPlanos) return;
     form.setValue("plano_obrigatorio", temPlanos);
+    // O erro "Selecione um plano" de uma tentativa anterior ficaria na tela
+    // mesmo depois do produto novo (sem planos) tornar o campo opcional.
+    if (!temPlanos) form.clearErrors("plano_contratado");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingPlanos, temPlanos]);
 
