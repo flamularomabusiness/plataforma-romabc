@@ -29,8 +29,8 @@ import { cn } from "@/lib/utils";
 const FUNCAO_LABELS: Record<string, string> = {
   DONO: "Dono",
   FINANCEIRO: "Financeiro",
-  SOCIO: "Sócio",
-  OUTRO: "Outros",
+  SÓCIO: "Sócio",
+  OUTROS: "Outros",
 };
 
 export function TabelaPessoasEditavel({

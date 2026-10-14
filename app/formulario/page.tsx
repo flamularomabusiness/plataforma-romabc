@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
 import { useCriarContrato, uploadContratoDocumento, vincularAvaliacaoAoContrato } from "@/lib/queries";
 import { lerResultadoDaUrl, resumoResultado } from "@/lib/ferramentas/indice-complexidade";
+import { normalizarFuncaoPessoa } from "@/lib/funcao-pessoa";
 import { aplicarResultadoComplexidade } from "@/components/formulario/aplicar-complexidade";
 import type { NovoContratoPayload } from "@/lib/types";
 import { getUserId, redirectPathAfterFormulario } from "@/lib/auth";
@@ -70,6 +71,13 @@ export default function FormularioPage() {
     function restaurarRascunho(raw: string) {
     try {
       const draft = JSON.parse(raw);
+      // Rascunhos salvos antes do alinhamento com a constraint têm funcao
+      // "SOCIO"/"OUTRO" — normaliza em vez de descartar o rascunho inteiro.
+      if (Array.isArray(draft?.pessoas)) {
+        for (const pessoa of draft.pessoas) {
+          if (pessoa && typeof pessoa === "object") pessoa.funcao = normalizarFuncaoPessoa(pessoa.funcao);
+        }
+      }
       // Um rascunho salvo antes de uma mudança no schema (ex.: "contatos" ->
       // "pessoas") não tem mais o formato esperado. Restaurar um rascunho
       // assim sobrescreveria valoresPadrao com campos faltando (o array

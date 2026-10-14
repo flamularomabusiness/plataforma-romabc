@@ -39,8 +39,8 @@ import { FUNCOES_PESSOA } from "@/lib/types";
 const FUNCAO_LABELS: Record<(typeof FUNCOES_PESSOA)[number], string> = {
   DONO: "Dono",
   FINANCEIRO: "Financeiro",
-  SOCIO: "Sócio",
-  OUTRO: "Outros",
+  SÓCIO: "Sócio",
+  OUTROS: "Outros",
 };
 
 const pessoaModalSchema = z.object({

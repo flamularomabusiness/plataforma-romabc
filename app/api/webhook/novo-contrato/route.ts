@@ -2,6 +2,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { obterSessaoServidor } from "@/lib/supabase-server";
 import { notificarNovoContrato } from "@/lib/notificacoes";
+import { normalizarFuncoesDoPayload } from "@/lib/funcao-pessoa";
 import {
   FORMAS_PAGAMENTO,
   FUNCOES_PESSOA,
@@ -169,7 +170,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  const parsed = novoContratoPayloadSchema.safeParse(body);
+  // Normaliza pessoas[].funcao (trim, maiúsculas, SOCIO -> SÓCIO, OUTRO ->
+  // OUTROS) ANTES de validar: o banco só aceita DONO/FINANCEIRO/SÓCIO/OUTROS
+  // (pessoas_cliente_funcao_check) e um valor fora disso derrubava a criação
+  // com um 23514 genérico. Fora dos aceitos, devolve a mensagem clara.
+  const { body: bodyNormalizado, erro: erroFuncao } = normalizarFuncoesDoPayload(body);
+  if (erroFuncao) {
+    console.error("[novo-contrato] função de pessoa inválida (400):", erroFuncao);
+    return NextResponse.json({ error: "Payload inválido", details: erroFuncao }, { status: 400 });
+  }
+
+  const parsed = novoContratoPayloadSchema.safeParse(bodyNormalizado);
   if (!parsed.success) {
     const detalhes = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
     console.error("[novo-contrato] payload inválido (400):", detalhes);

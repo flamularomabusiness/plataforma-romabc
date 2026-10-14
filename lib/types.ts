@@ -18,8 +18,12 @@ export const FUNCOES_CONTATO = [
 ] as const;
 export type FuncaoContato = (typeof FUNCOES_CONTATO)[number];
 
-/** Função da Pessoa Cliente — enum próprio de pessoas_cliente, distinto de FUNCOES_CONTATO. */
-export const FUNCOES_PESSOA = ["DONO", "FINANCEIRO", "SOCIO", "OUTRO"] as const;
+/**
+ * Função da Pessoa Cliente — enum próprio de pessoas_cliente, distinto de
+ * FUNCOES_CONTATO. Valores EXATAMENTE como em pessoas_cliente_funcao_check
+ * (SÓCIO com acento, OUTROS no plural) — ver lib/funcao-pessoa.ts.
+ */
+export const FUNCOES_PESSOA = ["DONO", "FINANCEIRO", "SÓCIO", "OUTROS"] as const;
 export type FuncaoPessoa = (typeof FUNCOES_PESSOA)[number];
 
 export const TIPOS_PAGAMENTO = ["recorrente", "venda_unica", "parcelado"] as const;

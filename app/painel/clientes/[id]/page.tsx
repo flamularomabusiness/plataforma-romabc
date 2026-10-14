@@ -131,11 +131,12 @@ const FUNCAO_LABELS: Record<string, string> = {
   OUTRO: "Outro",
 };
 
+// Chaves = valores de pessoas_cliente_funcao_check (SÓCIO com acento, OUTROS no plural).
 const FUNCAO_PESSOA_LABELS: Record<string, string> = {
   DONO: "Dono",
   FINANCEIRO: "Financeiro",
-  SOCIO: "Sócio",
-  OUTRO: "Outros",
+  SÓCIO: "Sócio",
+  OUTROS: "Outros",
 };
 
 const STATUS_CONTRATO_VARIANT: Record<StatusContrato, "success" | "secondary" | "destructive"> = {

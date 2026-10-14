@@ -30,8 +30,8 @@ const MAX_PESSOAS = 10;
 const FUNCAO_LABELS: Record<string, string> = {
   DONO: "Dono",
   FINANCEIRO: "Financeiro",
-  SOCIO: "Sócio",
-  OUTRO: "Outros",
+  SÓCIO: "Sócio",
+  OUTROS: "Outros",
 };
 
 export function SecaoPessoaCliente() {
