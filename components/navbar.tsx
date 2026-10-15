@@ -1,11 +1,12 @@
 "use client";
 
-import { ROLE_LABELS, useUserRole } from "@/lib/auth";
+import { ROLE_LABELS, useUserNome, useUserRole } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 /** Barra superior do painel (desktop) — a Sidebar já cobre o header mobile. */
 export function Navbar() {
   const userRole = useUserRole();
+  const nome = useUserNome();
   const label = ROLE_LABELS[userRole];
 
   return (
@@ -16,9 +17,12 @@ export function Navbar() {
           className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-gradient text-sm font-semibold text-white"
           aria-hidden
         >
-          {label.charAt(0)}
+          {(nome ?? label).charAt(0).toUpperCase()}
         </span>
-        <span className="text-sm font-medium text-foreground">{label}</span>
+        <div className="flex flex-col leading-tight">
+          <span className="text-sm font-medium text-foreground">{nome ?? label}</span>
+          {nome && <span className="text-xs text-muted-foreground">{label}</span>}
+        </div>
       </div>
     </header>
   );

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { loginComEmail } from "@/lib/auth";
+import { getUserRole, loginComEmail } from "@/lib/auth";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email é obrigatório").email("Email inválido"),
@@ -40,7 +40,8 @@ export default function LoginPage() {
     setCarregando(true);
     try {
       await loginComEmail(values.email, values.senha);
-      router.push("/painel/inicio");
+      // loginComEmail já resolveu a role; consultora só tem o aviso (o middleware garante também).
+      router.push(getUserRole() === "consultora" ? "/aviso-ata" : "/painel/inicio");
       router.refresh();
     } catch (error) {
       setErroGeral(error instanceof Error ? error.message : "Erro ao entrar");

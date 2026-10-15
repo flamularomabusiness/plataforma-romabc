@@ -11,80 +11,12 @@ import { supabase } from "./supabase";
  * usuarios), a leitura continua a mesma.
  */
 
-export const USER_ROLES = ["comercial", "administrator", "financeiro"] as const;
-export type UserRole = (typeof USER_ROLES)[number];
+import { USER_ROLES, podeAcessar, type Funcionalidade, type UserRole } from "./papeis";
 
-export const ROLE_LABELS: Record<UserRole, string> = {
-  comercial: "Comercial",
-  administrator: "Administrador",
-  financeiro: "Financeiro",
-};
-
-/**
- * Permissões por funcionalidade em vez de uma hierarquia numérica: comercial
- * tem um recorte próprio (só Clientes + Novo Contrato) que não é um
- * subconjunto do resto. administrator e financeiro hoje têm exatamente as
- * mesmas permissões de negócio — a única diferença entre os dois é
- * gerenciarUsuarios, exclusiva de administrator (promover/rebaixar/desativar
- * gente é um tipo de poder à parte, não "mais uma funcionalidade normal").
- */
-export type Funcionalidade =
-  | "dashboard"
-  | "clientes"
-  | "formulario"
-  | "editarStatusCliente"
-  | "editarStatusPagamento"
-  | "importarDados"
-  | "adicionarPessoa"
-  | "adicionarEmpresa"
-  | "gerenciarUsuarios"
-  | "deletarCliente";
-
-const PERMISSOES: Record<UserRole, Record<Funcionalidade, boolean>> = {
-  comercial: {
-    dashboard: false,
-    clientes: true,
-    formulario: true,
-    editarStatusCliente: false,
-    editarStatusPagamento: false,
-    importarDados: false,
-    adicionarPessoa: false,
-    adicionarEmpresa: false,
-    gerenciarUsuarios: false,
-    // Comercial não edita nem status de cliente hoje — dar poder de ocultar
-    // QUALQUER cliente do sistema (não existe conceito de "dono") seria uma
-    // permissão nova mais sensível que tudo que ele já tem. Decisão
-    // confirmada com o usuário ao construir esta feature.
-    deletarCliente: false,
-  },
-  administrator: {
-    dashboard: true,
-    clientes: true,
-    formulario: true,
-    editarStatusCliente: true,
-    editarStatusPagamento: true,
-    importarDados: true,
-    adicionarPessoa: true,
-    adicionarEmpresa: true,
-    gerenciarUsuarios: true,
-    deletarCliente: true,
-  },
-  financeiro: {
-    dashboard: true,
-    clientes: true,
-    formulario: true,
-    editarStatusCliente: true,
-    editarStatusPagamento: true,
-    importarDados: true,
-    adicionarPessoa: true,
-    adicionarEmpresa: true,
-    gerenciarUsuarios: false,
-    // Só soft delete — hard delete é exclusivo de administrator, checado
-    // direto pela role (não por uma Funcionalidade separada) nos pontos que
-    // chamam deletar_cliente_hard.
-    deletarCliente: true,
-  },
-};
+// Papéis e permissões moram em ./papeis (sem React/Supabase, pra o middleware e as
+// rotas /api importarem a mesma definição). Re-exportados aqui pra API pública
+// deste arquivo continuar igual.
+export { USER_ROLES, ROLE_LABELS, PERMISSOES, podeAcessar, type Funcionalidade, type UserRole } from "./papeis";
 
 // ---------------------------------------------------------------------------
 // Estado de sessão em memória.
@@ -100,6 +32,7 @@ const PERMISSOES: Record<UserRole, Record<Funcionalidade, boolean>> = {
 
 let cachedRole: UserRole = "comercial";
 let cachedUserId: string | null = null;
+let cachedNome: string | null = null;
 let sessaoResolvida = false;
 let listenerIniciado = false;
 const assinantes = new Set<() => void>();
@@ -109,10 +42,12 @@ function normalizarRole(bruto: unknown): UserRole {
   return (USER_ROLES as readonly string[]).includes(valor) ? (valor as UserRole) : "comercial";
 }
 
-async function buscarLinhaUsuario(userId: string): Promise<{ role: UserRole; ativo: boolean } | null> {
+async function buscarLinhaUsuario(
+  userId: string
+): Promise<{ role: UserRole; ativo: boolean; nome: string | null } | null> {
   const { data, error } = await supabase
     .from("usuarios")
-    .select("role, ativo")
+    .select("role, ativo, nome")
     .eq("id", userId)
     .maybeSingle();
   if (error) {
@@ -124,7 +59,11 @@ async function buscarLinhaUsuario(userId: string): Promise<{ role: UserRole; ati
     return null;
   }
   console.log("[auth] role lida do banco:", data.role, "| ativo:", data.ativo, "| userId:", userId);
-  return { role: normalizarRole(data.role), ativo: data.ativo !== false };
+  return {
+    role: normalizarRole(data.role),
+    ativo: data.ativo !== false,
+    nome: (data.nome as string | null) ?? null,
+  };
 }
 
 function notificarAssinantes() {
@@ -140,6 +79,7 @@ function iniciarListenerAuth() {
     cachedUserId = session?.user?.id ?? null;
     if (!session?.user) {
       cachedRole = "comercial";
+      cachedNome = null;
       sessaoResolvida = true;
       notificarAssinantes();
       return;
@@ -155,6 +95,7 @@ function iniciarListenerAuth() {
         return;
       }
       cachedRole = linha?.role ?? "comercial";
+      cachedNome = linha?.nome ?? null;
       sessaoResolvida = true;
       console.log("[auth] listener atualizou cachedRole para:", cachedRole, "(evento:", evento, ")");
       notificarAssinantes();
@@ -171,11 +112,6 @@ export function getUserRole(): UserRole {
 export function getUserId(): string | null {
   iniciarListenerAuth();
   return cachedUserId;
-}
-
-/** Variante pura, sem tocar na sessão — use com uma role já conhecida (ex.: vinda de useUserRole). */
-export function podeAcessar(userRole: UserRole, funcionalidade: Funcionalidade): boolean {
-  return PERMISSOES[userRole][funcionalidade];
 }
 
 export function hasAccess(funcionalidade: Funcionalidade): boolean {
@@ -205,6 +141,23 @@ export function useUserRole(): UserRole {
   }, []);
 
   return role;
+}
+
+/** Nome de quem está logado (usuarios.nome) — null até a sessão resolver ou se a conta não tem nome. */
+export function useUserNome(): string | null {
+  const [nome, setNome] = useState<string | null>(cachedNome);
+
+  useEffect(() => {
+    iniciarListenerAuth();
+    const atualizar = () => setNome(cachedNome);
+    assinantes.add(atualizar);
+    if (sessaoResolvida) atualizar();
+    return () => {
+      assinantes.delete(atualizar);
+    };
+  }, []);
+
+  return nome;
 }
 
 /**
@@ -244,6 +197,16 @@ export interface UsuarioAtual {
 }
 
 function traduzirErroAuth(mensagem: string): string {
+  // O cadastro só é aceito pra e-mails da lista autorizada: o banco recusa os
+  // demais (trigger em auth.users), e o Supabase devolve isso como erro genérico.
+  const minuscula = mensagem.toLowerCase();
+  if (
+    minuscula.includes("database error saving new user") ||
+    minuscula.includes("email não autorizado") ||
+    minuscula.includes("e-mail não autorizado")
+  ) {
+    return "Este email ainda não foi liberado. Fale com o administrador para autorizar seu acesso.";
+  }
   if (mensagem.includes("Invalid login credentials")) return "Email ou senha incorretos.";
   if (mensagem.includes("Email not confirmed")) {
     return "Confirme seu email antes de entrar — verifique sua caixa de entrada (e o spam).";
@@ -252,6 +215,23 @@ function traduzirErroAuth(mensagem: string): string {
   if (mensagem.includes("Password should be at least")) return "A senha precisa ter pelo menos 6 caracteres.";
   if (mensagem.includes("Unable to validate email address")) return "Email inválido.";
   return mensagem;
+}
+
+/**
+ * O trigger handle_new_user deveria copiar o nome do cadastro
+ * (user_metadata.nome) pra usuarios.nome. Se a conta ficou sem nome (trigger
+ * antigo, conta criada antes), preenche no primeiro login: a RLS deixa a
+ * própria pessoa editar a própria linha, e a role segue protegida por trigger.
+ */
+async function sincronizarNomeDoCadastro(userId: string, nomeCadastro: unknown, nomeAtual: string | null) {
+  if (nomeAtual || typeof nomeCadastro !== "string" || !nomeCadastro.trim()) return;
+  const nome = nomeCadastro.trim();
+  const { error } = await supabase.from("usuarios").update({ nome }).eq("id", userId);
+  if (error) {
+    console.warn("[auth] não consegui gravar o nome do cadastro em usuarios:", error.message);
+    return;
+  }
+  cachedNome = nome;
 }
 
 export async function obterUsuarioAtual(): Promise<UsuarioAtual | null> {
@@ -294,6 +274,8 @@ export async function loginComEmail(email: string, senha: string) {
 
     cachedUserId = data.user.id;
     cachedRole = linha?.role ?? "comercial";
+    cachedNome = linha?.nome ?? null;
+    await sincronizarNomeDoCadastro(data.user.id, data.user.user_metadata?.nome, linha?.nome ?? null);
     sessaoResolvida = true;
     console.log("[auth] cachedRole definido para:", cachedRole);
     notificarAssinantes();
@@ -310,8 +292,9 @@ export async function loginComEmail(email: string, senha: string) {
  * "administrator" sozinho — promoção só acontece depois, por quem já é
  * administrator.
  */
-export async function cadastroComEmail(email: string, senha: string) {
-  const { data, error } = await supabase.auth.signUp({ email, password: senha });
+export async function cadastroComEmail({ nome, email, senha }: { nome: string; email: string; senha: string }) {
+  // O nome vai em options.data (user_metadata) — o trigger handle_new_user copia pra usuarios.nome.
+  const { data, error } = await supabase.auth.signUp({ email, password: senha, options: { data: { nome } } });
   if (error) throw new Error(traduzirErroAuth(error.message));
   return data;
 }
@@ -319,6 +302,7 @@ export async function cadastroComEmail(email: string, senha: string) {
 export async function logout() {
   await supabase.auth.signOut();
   cachedRole = "comercial";
+  cachedNome = null;
   cachedUserId = null;
   sessaoResolvida = true;
   notificarAssinantes();

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { obterSessaoServidor } from "@/lib/supabase-server";
+import { podeAcessarPorRole, USER_ROLES } from "@/lib/papeis";
 import { STATUS_CLIENTE, STATUS_PAGAMENTO } from "@/lib/types";
 import type { ImportarDadosResultado } from "@/lib/types";
 
@@ -25,11 +26,6 @@ function formatarErroZod(error: z.ZodError): string {
     })
     .join("; ");
 }
-
-// Duplicado de USER_ROLES (lib/auth.ts) de propósito: esse arquivo tem
-// useState/useEffect (é pensado pra rodar no client) e não pode ser
-// importado por uma API route server-side.
-const USER_ROLES = ["comercial", "administrator", "financeiro"] as const;
 
 const clienteRowSchema = z.object({
   empresa: z.string().min(1),
@@ -74,9 +70,10 @@ export async function POST(request: NextRequest) {
   }
   const { supabase, role: usuarioRole } = sessao;
 
-  if (!sessao.ativo || (usuarioRole !== "administrator" && usuarioRole !== "financeiro")) {
+  // Mesma permissão da tela de importação (administrator, financeiro e bpo).
+  if (!sessao.ativo || !podeAcessarPorRole(usuarioRole, "importarDados")) {
     return NextResponse.json(
-      { error: "Apenas Administrador e Financeiro podem importar dados" },
+      { error: "Seu perfil não tem permissão para importar dados" },
       { status: 403 }
     );
   }

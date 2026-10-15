@@ -6,6 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // por role (o que cada Funcionalidade permite) continua nas próprias páginas
 // via useUserRole()/podeAcessar() (lib/auth.ts) — não duplicado aqui.
 const ROTAS_PUBLICAS = ["/login", "/signup"];
+const ROTA_AVISO_ATA = "/aviso-ata";
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
@@ -60,6 +61,18 @@ export async function middleware(request: NextRequest) {
       await supabase.auth.signOut();
       const url = request.nextUrl.clone();
       url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+
+    // Consultora só usa o Dashboard de ATAs (sistema à parte): nenhuma tela da
+    // plataforma, só o aviso que leva até lá. Vale logo após o login também —
+    // o login manda pra /painel/inicio e cai aqui. (/login e /signup são rotas
+    // públicas e assets/_next/api ficam fora do matcher, então não passam por aqui.)
+    const rotaAviso = path === ROTA_AVISO_ATA || path.startsWith(`${ROTA_AVISO_ATA}/`);
+    if (linha?.role === "consultora" && !rotaAviso) {
+      const url = request.nextUrl.clone();
+      url.pathname = ROTA_AVISO_ATA;
+      url.search = "";
       return NextResponse.redirect(url);
     }
 

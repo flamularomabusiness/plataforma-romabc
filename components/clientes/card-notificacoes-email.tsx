@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useUserRole } from "@/lib/auth";
+import { podeAcessar, useUserRole } from "@/lib/auth";
 import { useNotificacoesEmail } from "@/lib/queries";
 import type { StatusNotificacaoEmail, TipoNotificacaoEmail } from "@/lib/types";
 
@@ -33,7 +33,7 @@ function formatarDataHora(iso: string): string {
 /** Histórico dos e-mails de "novo contrato" — só administrator/financeiro (a RLS também barra os demais). */
 export function CardNotificacoesEmail({ contratoIds }: { contratoIds: string[] }) {
   const userRole = useUserRole();
-  const podeVer = userRole === "administrator" || userRole === "financeiro";
+  const podeVer = podeAcessar(userRole, "verHistoricoEmails");
   const { data: notificacoes, isLoading } = useNotificacoesEmail(contratoIds, podeVer);
 
   if (!podeVer) return null;

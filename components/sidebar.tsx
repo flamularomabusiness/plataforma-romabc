@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { logout, podeAcessar, ROLE_LABELS, useUserRole, type Funcionalidade } from "@/lib/auth";
+import { logout, podeAcessar, ROLE_LABELS, useUserNome, useUserRole, type Funcionalidade } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Logo } from "@/components/logo";
 
@@ -57,6 +57,7 @@ export function Sidebar() {
   const router = useRouter();
   const [aberta, setAberta] = useState(false);
   const userRole = useUserRole();
+  const nomeUsuario = useUserNome();
   const itensVisiveis = ITENS_MENU.filter(
     (item) => !item.funcionalidade || podeAcessar(userRole, item.funcionalidade)
   );
@@ -121,8 +122,11 @@ export function Sidebar() {
         <div className="space-y-3 border-t p-4">
           <ThemeToggle className="w-full justify-start" />
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <User className="h-4 w-4" />
-            Tipo: {ROLE_LABELS[userRole]}
+            <User className="h-4 w-4 shrink-0" />
+            <span className="min-w-0">
+              {nomeUsuario && <span className="block truncate font-medium text-foreground">{nomeUsuario}</span>}
+              Tipo: {ROLE_LABELS[userRole]}
+            </span>
           </div>
           <button
             onClick={sair}

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { obterSessaoServidor } from "@/lib/supabase-server";
 import { notificarNovoContrato } from "@/lib/notificacoes";
 import { normalizarFuncoesDoPayload } from "@/lib/funcao-pessoa";
+import { podeAcessarPorRole } from "@/lib/papeis";
 import {
   FORMAS_PAGAMENTO,
   FUNCOES_PESSOA,
@@ -160,6 +161,11 @@ export async function POST(request: NextRequest) {
   }
   if (!sessao.ativo) {
     return NextResponse.json({ error: "Usuário inativo" }, { status: 403 });
+  }
+  // Mesma permissão do formulário (comercial, administrator, financeiro e bpo).
+  // A consultora não acessa nada da plataforma — só o Dashboard de ATAs.
+  if (!podeAcessarPorRole(sessao.role, "formulario")) {
+    return NextResponse.json({ error: "Seu perfil não tem permissão para criar contratos" }, { status: 403 });
   }
   const { supabase } = sessao;
 

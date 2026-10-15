@@ -14,11 +14,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { cadastroComEmail } from "@/lib/auth";
 
-// Sem campo de role de propósito — toda conta nova nasce "comercial" (ver
-// supabase/migration_auth_usuarios.sql). Deixar escolher a role aqui
-// permitiria qualquer um virar "administrator" sozinho.
+// Sem campo de role de propósito: o papel nasce da lista de e-mails autorizados,
+// no banco. Deixar escolher a role aqui permitiria qualquer um virar
+// "administrator" sozinho.
 const signupSchema = z
   .object({
+    // trim + espaços internos repetidos viram um só, antes de contar os 3 caracteres.
+    nome: z
+      .string()
+      .transform((valor) => valor.trim().replace(/\s+/g, " "))
+      .pipe(z.string().min(3, "Informe seu nome completo (mínimo 3 caracteres)")),
     email: z.string().min(1, "Email é obrigatório").email("Email inválido"),
     senha: z.string().min(6, "A senha precisa ter pelo menos 6 caracteres"),
     confirmarSenha: z.string().min(1, "Confirme a senha"),
@@ -38,14 +43,14 @@ export default function SignupPage() {
 
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", senha: "", confirmarSenha: "" },
+    defaultValues: { nome: "", email: "", senha: "", confirmarSenha: "" },
   });
 
   async function onSubmit(values: SignupValues) {
     setErroGeral(null);
     setCarregando(true);
     try {
-      await cadastroComEmail(values.email, values.senha);
+      await cadastroComEmail({ nome: values.nome, email: values.email, senha: values.senha });
       setSucesso(true);
       setTimeout(() => router.push("/login"), 2500);
     } catch (error) {
@@ -63,7 +68,7 @@ export default function SignupPage() {
             <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
             <p className="text-lg font-semibold">Conta criada!</p>
             <p className="text-sm text-muted-foreground">
-              Sua conta começa com acesso Comercial. Redirecionando para o login...
+              Redirecionando para o login...
             </p>
           </CardContent>
         </Card>
@@ -81,6 +86,20 @@ export default function SignupPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="nome"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome completo</FormLabel>
+                    <FormControl>
+                      <Input autoComplete="name" placeholder="Seu nome completo" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="email"
@@ -124,7 +143,7 @@ export default function SignupPage() {
               />
 
               <p className="text-xs text-muted-foreground">
-                Toda conta nova começa com acesso Comercial. Um Administrador pode liberar mais acesso depois.
+                Só e-mails previamente liberados pelo administrador conseguem se cadastrar.
               </p>
 
               {erroGeral && <p className="text-sm font-medium text-destructive">{erroGeral}</p>}

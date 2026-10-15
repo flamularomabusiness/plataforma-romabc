@@ -156,7 +156,7 @@ export default function AdminUsuariosPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Usuário</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Consultora</TableHead>
                   <TableHead>Status</TableHead>
@@ -176,11 +176,14 @@ export default function AdminUsuariosPage() {
                     const souEu = usuario.id === meuId;
                     return (
                       <TableRow key={usuario.id}>
-                        <TableCell className="font-medium">
-                          {usuario.email}
-                          {souEu && (
-                            <span className="ml-2 text-xs text-muted-foreground">(você)</span>
-                          )}
+                        <TableCell>
+                          <div className="font-medium">
+                            {usuario.nome ?? <span className="text-muted-foreground">Sem nome</span>}
+                            {souEu && (
+                              <span className="ml-2 text-xs font-normal text-muted-foreground">(você)</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{usuario.email}</div>
                         </TableCell>
                         <TableCell>
                           <Select

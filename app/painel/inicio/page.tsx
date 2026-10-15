@@ -45,6 +45,8 @@ function AcaoCard({
 export default function InicioPage() {
   const router = useRouter();
   const userRole = useUserRole();
+  // BPO tem o mesmo perfil do financeiro (mesmas permissões).
+  const perfilFinanceiro = userRole === "financeiro" || userRole === "bpo";
   const { data: kpis, isLoading: loadingKpis } = useKPIs();
 
   async function sair() {
@@ -63,9 +65,9 @@ export default function InicioPage() {
         {podeAcessar(userRole, "dashboard") && (
           <AcaoCard
             icon={LayoutDashboard}
-            titulo={userRole === "financeiro" ? "Dashboard Financeiro" : "Dashboard"}
+            titulo={perfilFinanceiro ? "Dashboard Financeiro" : "Dashboard"}
             descricao={
-              userRole === "financeiro"
+              perfilFinanceiro
                 ? "Receitas, pagamentos e projeções financeiras."
                 : "KPIs, receita projetada e clientes por dificuldade."
             }
